@@ -1,0 +1,51 @@
+version: 2
+
+project_name: archbench
+
+builds:
+  - id: archbench
+    main: ./cmd/archbench
+    binary: archbench
+    env:
+      - CGO_ENABLED=0
+    targets:
+      - darwin_amd64_v1
+      - darwin_arm64
+      - linux_amd64_v1
+      - linux_arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/sirrobot01/archbench/internal/cli.version={{ .Version }}
+
+archives:
+  - id: archbench
+    builds:
+      - archbench
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+      {{- with .Arm }}v{{ . }}{{ end }}
+      {{- with .Mips }}_{{ . }}{{ end }}
+      {{- with .Amd64 }}{{ if not (eq . "v1") }}_{{ . }}{{ end }}{{ end }}
+    files:
+      - README.md
+      - docs/*
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+
+release:
+  github:
+    owner: sirrobot01
+    name: archbench
+  prerelease: auto

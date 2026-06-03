@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: build & unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::These files are not gofmt-clean:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test -race ./...
+
+  lint:
+    name: golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: golangci/golangci-lint-action@v7
+        with:
+          version: latest
+
+  integration:
+    name: real-openssh integration
+    runs-on: ubuntu-latest
+    # Only run once the cheap checks pass; this job provisions Docker.
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # ubuntu-latest ships with Docker; the test auto-provisions an
+      # openssh-server container (ARCHBENCH_SSH_TEST_HOST overrides this).
+      - name: Pre-pull sshd image
+        run: docker pull lscr.io/linuxserver/openssh-server:latest
+
+      - name: Run integration tests
+        run: go test -tags integration -run TestIntegrationRealOpenSSH ./internal/runner/ssh/ -v -timeout 300s

@@ -1,0 +1,16 @@
+name: go-basic
+
+mode: bench
+
+targets:
+  - name: local
+    type: local
+
+runs:
+  - name: small-sum
+    command: go test ./... -run '^$' -bench=BenchmarkSumSmall -benchmem -count=5
+
+  - name: large-sum
+    command: go test ./... -run '^$' -bench=BenchmarkSumLarge -benchmem -count=5
+
+parser: go-test
