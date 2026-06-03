@@ -9,16 +9,12 @@ cross-architecture workflows. It is aimed at developers who work on ARM64
 laptops but need reproducible results from AMD64 Linux machines, homelab boxes,
 or other SSH-accessible benchmark hosts.
 
-v0.1 focuses on the core workflow:
-
 - local and SSH targets
 - `bench` and `test` modes
 - Go output normalization through the built-in `go-test` parser
 - JSON result artifacts
 - terminal and Markdown reports
 - local and remote build-cache wiring through `$ARCHBENCH_CACHE`
-
-Docker and GitHub Actions support are planned after the first release.
 
 ## Install From Source
 
@@ -33,19 +29,7 @@ go build ./cmd/archbench
 ./archbench version
 ```
 
-## Releases
-
-GitHub releases are produced by GoReleaser when a version tag is pushed:
-
-```sh
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-Release binaries embed the GoReleaser version, so `archbench version` prints the
-tag-derived version in packaged builds.
-
-v0.1 release archives target Linux and macOS. Windows is intentionally excluded
+**Note**: Windows is intentionally excluded
 until the runner layer supports non-POSIX process handling.
 
 ## Quick Start
@@ -137,5 +121,5 @@ existing SSH setup unless explicitly overridden in the spec.
 
 ## Project Status
 
-ArchBench is pre-v0.1. The core local/SSH path builds and has unit coverage, but
+ArchBench is still in beta. The core local/SSH path builds and has unit coverage, but
 the public API and result schema should still be treated as changeable.
