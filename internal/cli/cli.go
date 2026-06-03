@@ -27,7 +27,7 @@ func Execute() error {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newInitCmd(), newRunCmd(), newCompareCmd(), newReportCmd(), newCacheCmd(), newVersionCmd())
+	root.AddCommand(newInitCmd(), newRunCmd(), newGenerateCmd(), newCompareCmd(), newReportCmd(), newCacheCmd(), newVersionCmd())
 	return root.ExecuteContext(ctx)
 }
 

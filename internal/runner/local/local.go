@@ -68,6 +68,18 @@ func (r *Runner) Capabilities() archbench.Capabilities {
 	return archbench.Capabilities{Arch: runtime.GOARCH}
 }
 
+// Setup runs target-level provisioning steps in the working directory with the
+// cache variables set, so they share the build cache the runs use.
+func (r *Runner) Setup(ctx context.Context, steps []string, env map[string]string) error {
+	e := r.env(env)
+	for _, step := range steps {
+		if _, err := r.shell(ctx, step, e); err != nil {
+			return fmt.Errorf("setup %q: %w", step, err)
+		}
+	}
+	return nil
+}
+
 func (r *Runner) Execute(ctx context.Context, run archbench.Run) (*archbench.Output, error) {
 	env := r.env(run.Env)
 

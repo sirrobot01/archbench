@@ -6,6 +6,15 @@ targets:
   - name: local
     type: local
 
+  - name: remote
+    type: ssh
+    host: ssh-host
+    user: ssh-user
+    # A non-interactive SSH shell does not source the login profile, so go
+    # (installed at /usr/local/go/bin) is not on PATH by default. Pin it here.
+    env:
+      PATH: /usr/local/go/bin:/home/main/go/bin:/home/main/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/games
+
 runs:
   - name: small-sum
     command: go test ./... -run '^$' -bench=BenchmarkSumSmall -benchmem -count=5

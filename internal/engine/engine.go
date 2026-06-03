@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/internal/runner/docker"
+	"github.com/sirrobot01/archbench/internal/runner/ghactions"
 	"github.com/sirrobot01/archbench/internal/runner/local"
 	"github.com/sirrobot01/archbench/internal/runner/ssh"
 )
@@ -55,6 +57,16 @@ func (e *Engine) Run(ctx context.Context, s *archbench.Spec, target archbench.Ta
 		_ = r.Cleanup(cleanupCtx)
 	}()
 
+	// baseEnv is the parser's cache wiring overlaid with the target's env; it
+	// applies to setup and to every run, with each run's own env layered on top.
+	baseEnv := mergeEnv(defaultEnv(s.Parser), target.Env)
+
+	if len(target.Setup) > 0 {
+		if err := r.Setup(ctx, target.Setup, baseEnv); err != nil {
+			return nil, false, fmt.Errorf("setup %q: %w", target.Name, err)
+		}
+	}
+
 	started := time.Now()
 	res := &archbench.RunResult{
 		Target:  target.Name,
@@ -65,7 +77,7 @@ func (e *Engine) Run(ctx context.Context, s *archbench.Spec, target archbench.Ta
 
 	for _, specRun := range s.Runs {
 		run := specRun
-		run.Env = mergeEnv(defaultEnv(s.Parser), run.Env)
+		run.Env = mergeEnv(baseEnv, run.Env)
 
 		runStarted := time.Now()
 		out, err := r.Execute(ctx, run)
@@ -79,6 +91,7 @@ func (e *Engine) Run(ctx context.Context, s *archbench.Spec, target archbench.Ta
 				Kernel:    out.Kernel,
 				CPU:       out.CPU,
 				Toolchain: out.Toolchain,
+				Runner:    out.Runner,
 			}
 		} else {
 			res.Metadata.Toolchain = mergeEnv(res.Metadata.Toolchain, out.Toolchain)
@@ -90,7 +103,7 @@ func (e *Engine) Run(ctx context.Context, s *archbench.Spec, target archbench.Ta
 		}
 		res.Metadata.Toolchain = mergeEnv(res.Metadata.Toolchain, parsed.Toolchain)
 
-		res.Runs = append(res.Runs, archbench.ScenarioResult{
+		scenario := archbench.ScenarioResult{
 			Name:            specRun.Name,
 			Command:         specRun.Command,
 			Started:         runStarted,
@@ -98,7 +111,13 @@ func (e *Engine) Run(ctx context.Context, s *archbench.Spec, target archbench.Ta
 			ExitCode:        out.ExitCode,
 			Benchmarks:      parsed.Benchmarks,
 			Tests:           parsed.Tests,
-		})
+		}
+		// Keep the failure reason (e.g. "go: command not found") when a command
+		// exits non-zero; for a successful run stderr is noise.
+		if out.ExitCode != 0 {
+			scenario.Stderr = strings.TrimSpace(out.Stderr)
+		}
+		res.Runs = append(res.Runs, scenario)
 	}
 	res.DurationSeconds = time.Since(started).Seconds()
 	return res, emulated(target, r.Capabilities()), nil
@@ -110,8 +129,10 @@ func (e *Engine) runnerFor(t archbench.Target, cache archbench.Cache) (archbench
 		return local.New(e.dir, cache), nil
 	case archbench.TargetSSH:
 		return ssh.New(t, e.dir, cache), nil
-	case archbench.TargetDocker, archbench.TargetGitHubActions:
-		return nil, fmt.Errorf("target type %q not yet supported", t.Type)
+	case archbench.TargetDocker:
+		return docker.New(t, e.dir, cache), nil
+	case archbench.TargetGitHubActions:
+		return ghactions.New(e.dir, cache), nil
 	default:
 		return nil, fmt.Errorf("unknown target type %q", t.Type)
 	}

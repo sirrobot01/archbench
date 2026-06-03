@@ -23,6 +23,10 @@ type ScenarioResult struct {
 	DurationSeconds float64   `json:"duration_seconds"`
 	ExitCode        int       `json:"exit_code,omitempty"`
 
+	// Stderr is captured only for a failed run, so the reason a command exited
+	// non-zero (e.g. "go: command not found") survives into the result.
+	Stderr string `json:"stderr,omitempty"`
+
 	Benchmarks []Benchmark `json:"benchmarks,omitempty"`
 	Tests      []Test      `json:"tests,omitempty"`
 
@@ -36,6 +40,10 @@ type Metadata struct {
 	Kernel    string            `json:"kernel,omitempty"`
 	CPU       string            `json:"cpu,omitempty"`
 	Toolchain map[string]string `json:"toolchain,omitempty"`
+
+	// Runner optionally names the execution environment, e.g. the GitHub
+	// Actions runner label. Omitted for local and most remote runners.
+	Runner string `json:"runner,omitempty"`
 }
 
 // Well-known benchmark metric keys. Parsers may report others.

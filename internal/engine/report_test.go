@@ -120,6 +120,36 @@ func TestCompareTestReportsNewAndRemovedRuns(t *testing.T) {
 	}
 }
 
+// TestTerminalSurfacesFailedRun confirms a run that exited non-zero with no
+// parsed benchmarks reports the failure and its reason, rather than the benign
+// "No benchmarks parsed." that hid command-not-found errors.
+func TestTerminalSurfacesFailedRun(t *testing.T) {
+	r := &archbench.RunResult{
+		Target:   "remote",
+		Mode:     archbench.ModeBench,
+		Metadata: archbench.Metadata{OS: "linux", Arch: "amd64"},
+		Runs: []archbench.ScenarioResult{{
+			Name:     "small-sum",
+			Command:  "go test ./... -bench=.",
+			ExitCode: 127,
+			Stderr:   "sh: 1: go: command not found",
+		}},
+	}
+
+	cmd, out := captureCommand()
+	Terminal(cmd, r)
+
+	got := out.String()
+	for _, want := range []string{"command failed (exit 127)", "go: command not found", "hint:", "Set PATH"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("terminal output missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "No benchmarks parsed") {
+		t.Errorf("failed run should not report 'No benchmarks parsed':\n%s", got)
+	}
+}
+
 func captureCommand() (*cobra.Command, *bytes.Buffer) {
 	var out bytes.Buffer
 	cmd := &cobra.Command{}

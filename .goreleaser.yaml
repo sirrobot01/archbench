@@ -31,7 +31,35 @@ archives:
       {{- with .Amd64 }}{{ if not (eq . "v1") }}_{{ . }}{{ end }}{{ end }}
     files:
       - README.md
+      - LICENSE
       - docs/*
+
+homebrew_casks:
+  - name: archbench
+    ids:
+      - archbench
+    repository:
+      owner: sirrobot01
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Casks
+    homepage: "https://github.com/sirrobot01/archbench"
+    description: "Cross-architecture benchmark and test orchestration"
+    license: "MIT"
+    commit_author:
+      name: goreleaser-bot
+      email: goreleaser-bot@users.noreply.github.com
+    # Only publish the cask for stable releases, never prereleases.
+    skip_upload: auto
+    # Strip the quarantine xattr so the downloaded binary runs without a
+    # Gatekeeper prompt.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr",
+              args: ["-dr", "com.apple.quarantine", "#{staged_path}/archbench"]
+          end
 
 checksum:
   name_template: checksums.txt

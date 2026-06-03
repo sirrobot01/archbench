@@ -58,6 +58,42 @@ func TestExecuteNonZeroExit(t *testing.T) {
 	}
 }
 
+// TestSetup confirms target-level setup steps run in the work directory with
+// the cache variable and the passed env available, and that their side effects
+// persist for later runs.
+func TestSetup(t *testing.T) {
+	r := newRunner(t)
+
+	err := r.Setup(context.Background(),
+		[]string{`echo "cache=$ARCHBENCH_CACHE env=$GOMODCACHE" > marker`},
+		map[string]string{"GOMODCACHE": "$" + archbench.CacheEnv + "/go-mod"},
+	)
+	if err != nil {
+		t.Fatalf("Setup: %v", err)
+	}
+
+	out, err := r.Execute(context.Background(), archbench.Run{Command: "cat marker"})
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(out.Stdout, "cache=") || strings.Contains(out.Stdout, "cache= ") {
+		t.Errorf("cache variable not set during setup: %q", out.Stdout)
+	}
+	if !strings.Contains(out.Stdout, "/go-mod") {
+		t.Errorf("setup env not expanded: %q", out.Stdout)
+	}
+}
+
+// TestSetupError confirms a failing setup step surfaces as an error.
+func TestSetupError(t *testing.T) {
+	r := newRunner(t)
+
+	err := r.Setup(context.Background(), []string{"exit 3"}, nil)
+	if err == nil {
+		t.Fatal("expected an error from a failing setup step, got nil")
+	}
+}
+
 // TestExecuteEnv confirms custom env and the cache variable reach the command.
 func TestExecuteEnv(t *testing.T) {
 	r := newRunner(t)

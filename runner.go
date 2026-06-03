@@ -13,6 +13,10 @@ const CacheEnv = "ARCHBENCH_CACHE"
 // and capture its raw output; interpreting that output is the parser's job.
 type Runner interface {
 	Prepare(ctx context.Context) error
+	// Setup runs target-level provisioning steps once, after Prepare and before
+	// any Execute. The env carries the cache variables the steps should honor
+	// (e.g. so a `go mod download` warms the same module cache the runs use).
+	Setup(ctx context.Context, steps []string, env map[string]string) error
 	Execute(ctx context.Context, run Run) (*Output, error)
 	Cleanup(ctx context.Context) error
 	Capabilities() Capabilities
@@ -30,6 +34,10 @@ type Output struct {
 	Kernel    string
 	CPU       string
 	Toolchain map[string]string
+
+	// Runner optionally names the execution environment, e.g. the GitHub
+	// Actions runner label. Most runners leave it empty.
+	Runner string
 }
 
 // Capabilities describes what a runner supports.

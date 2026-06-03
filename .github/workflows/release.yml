@@ -31,3 +31,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PAT with `contents: write` on sirrobot01/homebrew-tap, so GoReleaser
+          # can commit the generated formula there. GITHUB_TOKEN is scoped to this
+          # repo only and cannot push to the tap.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

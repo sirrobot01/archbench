@@ -82,6 +82,81 @@ parser: go-test
 it to a temporary remote work directory, runs setup and the command there, then
 removes the work directory.
 
+### Toolchain not on PATH
+
+Commands run over a non-interactive SSH shell, which does not source the login
+profile (`~/.profile`, `~/.bashrc`, `/etc/profile.d`). A toolchain installed
+outside the default PATH — for example Go under `/usr/local/go/bin` — is then
+invisible, and runs fail with `command failed (exit 127)`. Pin the PATH on the
+target so the command can find it:
+
+```yaml
+targets:
+  - name: amd64-box
+    type: ssh
+    host: bench-box
+    env:
+      # Values are literal, so list the directories rather than referencing
+      # $PATH. Put the toolchain dir first.
+      PATH: /usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
+```
+
+The same applies to Docker targets whose image places a toolchain off the
+default PATH.
+
+## Docker Benchmarks
+
+```yaml
+name: container-demo
+mode: bench
+
+targets:
+  - name: amd64
+    type: docker
+    image: golang:1.26
+    platform: linux/amd64   # optional
+
+runs:
+  - name: all
+    command: go test ./... -run '^$' -bench=. -benchmem -count=10
+
+parser: go-test
+```
+
+ArchBench creates one container per target from `image`, syncs the project into
+an isolated work directory, runs each group with `docker exec`, and force-removes
+the container on cleanup. `platform` is optional; when it differs from the host
+architecture the run is emulated and benchmark timings are reported as
+untrustworthy. The same project-sync rules as SSH apply (Git-tracked plus
+untracked, non-ignored files).
+
+## GitHub Actions
+
+A `github-actions` target runs on the current machine, which on CI is the
+GitHub-hosted runner after `actions/checkout`.
+
+```yaml
+targets:
+  - name: ci-amd64
+    type: github-actions
+    runsOn: ubuntu-latest
+
+  - name: ci-arm64
+    type: github-actions
+    runsOn: ubuntu-24.04-arm
+```
+
+Generate a workflow that runs each `github-actions` target as a matrix job:
+
+```sh
+archbench generate
+```
+
+This writes `.github/workflows/archbench.yml`. Each job checks out the project,
+installs ArchBench, runs `archbench run --target <name>` on its `runsOn` runner
+(defaulting to `ubuntu-latest`), and uploads the JSON artifact. Results carry the
+runner label in their metadata so reports record which CI machine produced them.
+
 ## Cache Behavior
 
 Runners expose a cache directory through `$ARCHBENCH_CACHE`. For `go-test`,

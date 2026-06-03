@@ -1,4 +1,4 @@
-package ssh
+package project
 
 import (
 	"archive/tar"
@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-// nopWriteCloser lets us hand streamTar a buffer it can Close.
+// nopWriteCloser lets us hand StreamTar a buffer it can Close.
 type nopWriteCloser struct{ *bytes.Buffer }
 
 func (nopWriteCloser) Close() error { return nil }
@@ -31,8 +31,8 @@ func TestStreamTar(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := streamTar(nopWriteCloser{&buf}, root); err != nil {
-		t.Fatalf("streamTar: %v", err)
+	if err := StreamTar(nopWriteCloser{&buf}, root); err != nil {
+		t.Fatalf("StreamTar: %v", err)
 	}
 
 	got := untar(t, &buf)
@@ -65,8 +65,8 @@ func TestStreamTarRespectsGitIgnore(t *testing.T) {
 	runGit(t, root, "add", ".gitignore", "tracked.txt")
 
 	var buf bytes.Buffer
-	if err := streamTar(nopWriteCloser{&buf}, root); err != nil {
-		t.Fatalf("streamTar: %v", err)
+	if err := StreamTar(nopWriteCloser{&buf}, root); err != nil {
+		t.Fatalf("StreamTar: %v", err)
 	}
 
 	got := untar(t, &buf)

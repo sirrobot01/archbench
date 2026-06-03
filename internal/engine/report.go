@@ -5,6 +5,7 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/sirrobot01/archbench"
 	"github.com/sirrobot01/archbench/internal/ui"
@@ -67,6 +68,9 @@ func terminalBench(p Printer, runs []archbench.ScenarioResult) {
 			})
 		}
 		if len(rows) == 0 {
+			if failed(p, run) {
+				continue
+			}
 			p.Println(ui.Subtle("No benchmarks parsed."))
 			continue
 		}
@@ -78,8 +82,48 @@ func terminalBench(p Printer, runs []archbench.ScenarioResult) {
 	}
 }
 
+// exitCommandNotFound is the shell convention for a command that was not found
+// on PATH -- the usual symptom of a toolchain missing from a non-interactive
+// SSH or Docker shell.
+const exitCommandNotFound = 127
+
+// failed reports a non-zero run as an error line (with a stderr snippet when
+// available) and returns whether it did so. A zero exit returns false, leaving
+// rendering to the caller.
+func failed(p Printer, run archbench.ScenarioResult) bool {
+	if run.ExitCode == 0 {
+		return false
+	}
+	p.Println(ui.Danger(fmt.Sprintf("command failed (exit %d)", run.ExitCode)))
+	if run.Stderr != "" {
+		p.Println(ui.Subtle(snippet(run.Stderr, 5)))
+	}
+	if run.ExitCode == exitCommandNotFound {
+		p.Println(ui.Subtle("hint: command not found — SSH and Docker targets run a " +
+			"non-interactive shell that does not source your login profile, so a " +
+			"toolchain installed outside the default PATH is invisible. Set PATH via " +
+			"the target's env."))
+	}
+	return true
+}
+
+// snippet returns the last n lines of s for a compact failure summary.
+func snippet(s string, n int) string {
+	lines := strings.Split(strings.TrimSpace(s), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
+}
+
 func terminalTest(p Printer, runs []archbench.ScenarioResult) {
 	for _, run := range runs {
+		if len(run.Tests) == 0 && run.ExitCode != 0 {
+			p.Printf("%s %s\n", ui.Subtle("run"), ui.Title(run.Name))
+			failed(p, run)
+			continue
+		}
+
 		var pass, fail, skip int
 		rows := make([][]string, 0, len(run.Tests))
 		for _, t := range run.Tests {

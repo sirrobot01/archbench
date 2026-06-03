@@ -22,6 +22,15 @@ targets:
   #   host: 10.0.0.5
   #   user: ubuntu
 
+  # - name: amd64-container
+  #   type: docker
+  #   image: golang:1.26
+  #   platform: linux/amd64   # optional; pins a non-native arch via emulation
+
+  # - name: ci
+  #   type: github-actions
+  #   runsOn: ubuntu-latest   # used by 'archbench generate'
+
 runs:
   - name: all
     setup:

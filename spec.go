@@ -42,6 +42,18 @@ type Target struct {
 	Name string     `yaml:"name"`
 	Type TargetType `yaml:"type"`
 
+	// Setup holds provisioning steps run once per target, after the project is
+	// uploaded but before any run group. Use it for environment provisioning
+	// that should not repeat for every run -- installing system packages or
+	// warming the module cache. Per-run preparation belongs in Run.Setup.
+	Setup []string `yaml:"setup,omitempty"`
+
+	// Env holds environment variables applied to the target's setup steps and
+	// to every run on it, as a base a run's own Env overrides. Values may
+	// reference the cache directory through $ARCHBENCH_CACHE. Like Run.Env, the
+	// values may be secrets and are never exposed on a command line.
+	Env map[string]string `yaml:"env,omitempty"`
+
 	// Host may be a hostname or a ~/.ssh/config alias. User, Port, Key and
 	// ProxyJump are optional overrides; anything left unset is resolved by the
 	// system ssh client and the user's ssh config.
@@ -51,8 +63,15 @@ type Target struct {
 	Key       string `yaml:"key,omitempty"`
 	ProxyJump string `yaml:"proxyJump,omitempty"`
 
+	// Image and Platform configure a docker target. Platform (e.g. linux/amd64)
+	// pins a non-native architecture through the daemon's emulation.
 	Image    string `yaml:"image,omitempty"`
 	Platform string `yaml:"platform,omitempty"`
+
+	// RunsOn names the GitHub-hosted runner label for a github-actions target,
+	// e.g. ubuntu-latest or ubuntu-24.04-arm. It feeds `archbench generate`'s
+	// workflow matrix and defaults to ubuntu-latest.
+	RunsOn string `yaml:"runsOn,omitempty"`
 }
 
 // Run holds one named command group executed on each target.

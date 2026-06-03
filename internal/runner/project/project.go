@@ -1,4 +1,8 @@
-package ssh
+// Package project packages a local project directory into a gzip-compressed
+// tar stream for upload to a runner's isolated work directory. Both the SSH and
+// Docker runners use it so their sync behavior — Git-aware file selection and
+// the set of excluded directories — stays identical.
+package project
 
 import (
 	"archive/tar"
@@ -22,8 +26,8 @@ var excludedDirs = map[string]bool{
 	"node_modules":      true,
 }
 
-// streamTar writes a gzip-compressed tar of root into w, then closes w.
-func streamTar(w io.WriteCloser, root string) (err error) {
+// StreamTar writes a gzip-compressed tar of root into w, then closes w.
+func StreamTar(w io.WriteCloser, root string) (err error) {
 	defer func() {
 		if cerr := w.Close(); err == nil {
 			err = cerr

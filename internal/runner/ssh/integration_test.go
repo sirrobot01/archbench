@@ -76,6 +76,17 @@ func TestIntegrationRealOpenSSH(t *testing.T) {
 	}
 }
 
+func writeFile(t *testing.T, root, rel, content string) {
+	t.Helper()
+	p := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func requireSSHTools(t *testing.T) {
 	t.Helper()
 	for _, bin := range []string{"ssh", "ssh-keygen"} {
