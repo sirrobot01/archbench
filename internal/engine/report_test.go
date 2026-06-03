@@ -69,6 +69,54 @@ func TestCompareBenchReportsNewAndRemovedItems(t *testing.T) {
 	}
 }
 
+func TestBenchRegressions(t *testing.T) {
+	// 100 -> 150 ns/op is a +50% regression on the shared "stream" run.
+	baseline := benchResult("arm64", 100)
+	candidate := benchResult("amd64", 150)
+
+	// A benchmark that improved is not a regression.
+	baseline.Runs[0].Benchmarks = append(baseline.Runs[0].Benchmarks, archbench.Benchmark{
+		Name:    "BenchmarkFaster",
+		Metrics: map[string]float64{archbench.MetricNsPerOp: 200},
+	})
+	candidate.Runs[0].Benchmarks = append(candidate.Runs[0].Benchmarks, archbench.Benchmark{
+		Name:    "BenchmarkFaster",
+		Metrics: map[string]float64{archbench.MetricNsPerOp: 100},
+	})
+
+	// Below the threshold, +50% is reported but +10% is not.
+	regs := BenchRegressions(baseline, candidate, 25)
+	if len(regs) != 1 {
+		t.Fatalf("regressions = %d, want 1: %#v", len(regs), regs)
+	}
+	if regs[0].Benchmark != "BenchmarkRead" || regs[0].Run != "stream" {
+		t.Errorf("unexpected regression: %#v", regs[0])
+	}
+	if regs[0].Percent != 50 {
+		t.Errorf("percent = %v, want 50", regs[0].Percent)
+	}
+
+	// A higher threshold tolerates the same regression.
+	if regs := BenchRegressions(baseline, candidate, 75); len(regs) != 0 {
+		t.Errorf("regressions above threshold = %#v, want none", regs)
+	}
+}
+
+// TestBenchRegressionsSkipsUnmatched confirms a benchmark present on only one
+// side is treated as new/removed rather than a regression.
+func TestBenchRegressionsSkipsUnmatched(t *testing.T) {
+	baseline := benchResult("arm64", 100)
+	candidate := benchResult("amd64", 100)
+	candidate.Runs[0].Benchmarks = append(candidate.Runs[0].Benchmarks, archbench.Benchmark{
+		Name:    "BenchmarkNew",
+		Metrics: map[string]float64{archbench.MetricNsPerOp: 9999},
+	})
+
+	if regs := BenchRegressions(baseline, candidate, 1); len(regs) != 0 {
+		t.Errorf("regressions = %#v, want none (new benchmark is not a regression)", regs)
+	}
+}
+
 func TestCompareTestDivergence(t *testing.T) {
 	cmd, out := captureCommand()
 	err := Compare(cmd,

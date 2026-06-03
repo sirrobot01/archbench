@@ -1,0 +1,34 @@
+# Multi-target variant of go-allocs: the same benchmarks run on the local
+# machine, on an SSH host in exec mode, and inside a Docker container. The local
+# target works as-is; fill in `host` (and adjust PATH/image) for your setup:
+#
+#   archbench run --spec examples/go-allocs/archbench.remote.yaml --dir examples/go-allocs
+#
+# Run one target at a time with --target, or several at once with --concurrency.
+name: go-allocs
+
+mode: bench
+
+targets:
+  - name: local
+    type: local
+
+  - name: remote
+    type: ssh
+    host: bench-box          # your SSH host or ~/.ssh/config alias
+    exec: true               # run the suite through an archbench worker on the host
+    env:
+      # A non-interactive SSH shell does not source your login profile, so list
+      # the toolchain directory explicitly. Adjust paths for your host.
+      PATH: /usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
+
+  - name: amd64-container
+    type: docker
+    image: golang:1.26
+    platform: linux/amd64    # exercise amd64 via emulation on an arm64 host
+
+runs:
+  - name: join
+    command: go test ./... -run '^$' -bench=. -benchmem -count=5
+
+parser: go-test

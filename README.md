@@ -89,9 +89,18 @@ Compare two result artifacts:
 archbench compare baseline.json candidate.json
 ```
 
-## Example
+Add `--threshold` to fail (non-zero exit) when any benchmark's `ns/op`
+regresses past that percentage — useful as a CI gate:
 
-This repository includes a small benchmark fixture:
+```sh
+archbench compare baseline.json candidate.json --threshold 50
+```
+
+## Examples
+
+The [`examples/`](examples/) directory has self-contained suites you can run
+locally — a basic benchmark, one with meaningful memory metrics, and a test-mode
+suite. Each is its own module with its own spec:
 
 ```sh
 archbench run \
@@ -101,11 +110,13 @@ archbench run \
   --no-cache
 ```
 
+See [examples/README.md](examples/README.md) for the full list, including a
+multi-target spec that adds SSH (exec mode) and Docker targets.
+
 ## Spec Shape
 
 ```yaml
 name: my-suite
-
 mode: bench
 
 targets:
@@ -115,22 +126,18 @@ targets:
   - name: amd64-box
     type: ssh
     host: bench-box
-    setup:
-      - go mod download     # provisioned once, before any run
 
   - name: amd64-container
     type: docker
     image: golang:1.26
-    platform: linux/amd64   # optional; pins a non-native arch via emulation
+    platform: linux/amd64   # pin a non-native arch via emulation
 
   - name: ci
     type: github-actions
-    runsOn: ubuntu-latest   # runner label for the generated workflow
+    runsOn: ubuntu-latest
 
 runs:
   - name: parser
-    setup:
-      - go generate ./internal/parser/...   # per-run preparation
     command: go test ./internal/parser/... -run '^$' -bench=. -benchmem -count=10
 
   - name: stream
@@ -139,50 +146,18 @@ runs:
 parser: go-test
 ```
 
-Each selected target executes every entry in `runs` in order. The saved result
-artifact contains one top-level target result with a `runs` array, so reports and
-comparisons can keep benchmark groups separate.
+Each selected target executes every entry in `runs` in order, writing one
+`archbench-results/<target>.json` artifact with a `runs` array so reports and
+comparisons keep benchmark groups separate. Per-target `setup`/`env`, exec mode,
+Docker, GitHub Actions, caching, and test mode are covered in the docs below.
 
-A target's `setup` runs once, after the project is uploaded but before any run —
-use it to provision the environment (install system packages, warm the module
-cache). A run's `setup` runs before that single run's command, for per-run
-preparation. Both share the build cache wired through `$ARCHBENCH_CACHE`, so a
-`go mod download` in a target's `setup` warms the same module cache the runs use.
+## Documentation
 
-A target's `env` applies to its setup and to every run on it; a run's own `env`
-overrides it. Values may reference `$ARCHBENCH_CACHE` and, like run env, may hold
-secrets — they are written to a private file on the target, never passed on a
-command line.
-
-SSH hosts are delegated to the system `ssh` client. Host aliases, identities,
-ProxyJump, multiplexing, agents, and known_hosts behavior come from the user's
-existing SSH setup unless explicitly overridden in the spec.
-
-## Docker Targets
-
-A `docker` target runs the suite inside a container built from `image`. ArchBench
-creates one container per target, syncs the project into it, runs each group with
-`docker exec`, and removes the container afterward. Pin a non-native `platform`
-(e.g. `linux/amd64`) to exercise another architecture through the daemon's
-emulation — ArchBench flags such runs as untrustworthy for benchmark timings.
-
-```sh
-archbench run --target amd64-container
-```
-
-## GitHub Actions
-
-A `github-actions` target executes on the current machine, so it runs natively on
-a GitHub-hosted runner after the workflow checks out the project. Generate a
-workflow that wires up those targets as a build matrix:
-
-```sh
-archbench generate
-```
-
-This writes `.github/workflows/archbench.yml` with one matrix job per
-`github-actions` target, each running `archbench run` on its configured `runsOn`
-runner and uploading the result artifact.
+- [Getting Started](docs/getting-started.md) — full spec reference: local, SSH,
+  Docker, and GitHub Actions targets, `setup`/`env`, exec mode, PATH setup,
+  caching, and test mode.
+- [Security Model](docs/security.md) — SSH and Docker trust, project sync, and
+  how environment secrets are handled.
 
 ## Project Status
 

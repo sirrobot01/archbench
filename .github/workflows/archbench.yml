@@ -1,0 +1,104 @@
+# ArchBench benchmarking itself. Scaffolded with `archbench generate` from
+# archbench.yaml, then adapted to build archbench from the checked-out source
+# (so each run exercises this commit's orchestrator) and to gate pull requests
+# on benchmark regressions.
+name: archbench-self
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: archbench-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Record the suite's numbers on main (and on demand) as a downloadable
+  # artifact. Skipped on pull_request, where the regression job runs instead.
+  benchmark:
+    name: benchmark
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build archbench
+        run: |
+          go build -o "$RUNNER_TEMP/bin/archbench" ./cmd/archbench
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Run archbench
+        run: archbench run --spec archbench.yaml --target ci
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: archbench-ci
+          path: archbench-results/ci.json
+
+  # Gate pull requests: benchmark the base branch and the PR head on the same
+  # runner (cross-runner numbers are too noisy to compare), then fail if any
+  # benchmark's ns/op regressed past the threshold.
+  regression:
+    name: regression gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      NO_COLOR: "1" # plain, copy-pasteable tables in logs and the job summary
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # need the base ref to benchmark it
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build archbench
+        run: |
+          go build -o "$RUNNER_TEMP/bin/archbench" ./cmd/archbench
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Benchmark PR head
+        run: archbench run --spec archbench.yaml --target ci --out pr-results
+
+      - name: Benchmark base (${{ github.base_ref }})
+        # Benchmark the base tree with this PR's spec and archbench binary, so the
+        # base branch needs neither. A benchmark that only exists on one side is
+        # reported as new/removed, not a regression.
+        run: |
+          git worktree add "$RUNNER_TEMP/base" "origin/${{ github.base_ref }}"
+          archbench run \
+            --spec archbench.yaml \
+            --dir "$RUNNER_TEMP/base" \
+            --target ci \
+            --out base-results
+
+      - name: Compare and gate
+        shell: bash
+        # --threshold is deliberately lenient: shared CI runners are noisy, so
+        # this is meant to catch large regressions (a reverted optimization),
+        # not single-digit-percent drift. Tighten it as the numbers stabilize.
+        run: |
+          status=0
+          archbench compare \
+            base-results/ci.json pr-results/ci.json --threshold 50 > compare.txt 2>&1 || status=$?
+          {
+            echo '## ArchBench regression gate'
+            echo
+            echo "base \`${{ github.base_ref }}\` vs PR head, threshold 50%"
+            echo
+            echo '```'
+            cat compare.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat compare.txt
+          exit "$status"

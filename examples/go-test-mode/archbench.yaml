@@ -1,0 +1,13 @@
+name: go-test-mode
+
+mode: test
+
+targets:
+  - name: local
+    type: local
+
+runs:
+  - name: validate
+    command: go test ./... -json
+
+parser: go-test

@@ -119,6 +119,27 @@ runs:
   - name: bench
     command: echo ok
 `,
+		"exec on non-ssh target": `
+name: demo
+targets:
+  - name: local
+    type: local
+    exec: true
+runs:
+  - name: all
+    command: echo ok
+`,
+		"execBinary without exec": `
+name: demo
+targets:
+  - name: amd64
+    type: ssh
+    host: box
+    execBinary: /usr/local/bin/archbench
+runs:
+  - name: all
+    command: echo ok
+`,
 	}
 
 	for name, body := range cases {
@@ -127,6 +148,27 @@ runs:
 				t.Fatal("LoadSpec returned nil error")
 			}
 		})
+	}
+}
+
+func TestLoadSpecExecTarget(t *testing.T) {
+	s, err := LoadSpec(writeSpec(t, `
+name: demo
+targets:
+  - name: amd64
+    type: ssh
+    host: box
+    exec: true
+    execBinary: /usr/local/bin/archbench
+runs:
+  - name: all
+    command: go test ./... -bench=.
+`))
+	if err != nil {
+		t.Fatalf("LoadSpec: %v", err)
+	}
+	if !s.Targets[0].Exec || s.Targets[0].ExecBinary != "/usr/local/bin/archbench" {
+		t.Fatalf("exec fields not parsed: %#v", s.Targets[0])
 	}
 }
 

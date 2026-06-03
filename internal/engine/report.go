@@ -278,6 +278,65 @@ func compareBench(p Printer, a, b *archbench.RunResult) {
 	}
 }
 
+// Regression is a benchmark whose ns/op grew from baseline to candidate by more
+// than the caller's threshold.
+type Regression struct {
+	Run       string
+	Benchmark string
+	Baseline  float64 // baseline ns/op
+	Candidate float64 // candidate ns/op
+	Percent   float64 // signed percent change, always > threshold here
+}
+
+// BenchRegressions returns the benchmarks whose ns/op regressed from a
+// (baseline) to b (candidate) by more than thresholdPct percent, matching runs
+// and benchmarks by name. Benchmarks present on only one side are skipped: a
+// missing data point is a new or removed benchmark, not a regression. It returns
+// nil unless both results are bench mode.
+func BenchRegressions(a, b *archbench.RunResult, thresholdPct float64) []Regression {
+	if a.Mode != archbench.ModeBench || b.Mode != archbench.ModeBench {
+		return nil
+	}
+	candidateRuns := make(map[string]archbench.ScenarioResult, len(b.Runs))
+	for _, run := range b.Runs {
+		candidateRuns[run.Name] = run
+	}
+
+	var regs []Regression
+	for _, base := range a.Runs {
+		candidate, ok := candidateRuns[base.Name]
+		if !ok {
+			continue
+		}
+		candidateBenchmarks := make(map[string]archbench.Benchmark, len(candidate.Benchmarks))
+		for _, nb := range candidate.Benchmarks {
+			candidateBenchmarks[nb.Name] = nb
+		}
+		for _, ob := range base.Benchmarks {
+			nb, ok := candidateBenchmarks[ob.Name]
+			if !ok {
+				continue
+			}
+			an := ob.Metrics[archbench.MetricNsPerOp]
+			bn := nb.Metrics[archbench.MetricNsPerOp]
+			if an <= 0 {
+				continue
+			}
+			pct := (bn - an) / an * 100
+			if pct > thresholdPct {
+				regs = append(regs, Regression{
+					Run:       base.Name,
+					Benchmark: ob.Name,
+					Baseline:  an,
+					Candidate: bn,
+					Percent:   pct,
+				})
+			}
+		}
+	}
+	return regs
+}
+
 // ratio describes b relative to a as a signed percentage.
 func ratio(a, b float64) string {
 	if a == 0 {

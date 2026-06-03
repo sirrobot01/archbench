@@ -46,8 +46,47 @@ func (e *Engine) Run(ctx context.Context, s *archbench.Spec, target archbench.Ta
 		return nil, false, err
 	}
 
+	// The job is the full unit of work for the target: its setup, env, and runs.
+	// Env is the parser's cache wiring overlaid with the target's env; it applies
+	// to setup and to every run, with each run's own env layered on top in RunJob.
+	job := archbench.Job{
+		ProtocolVersion: archbench.ProtocolVersion,
+		Mode:            mode,
+		Parser:          s.Parser,
+		Setup:           target.Setup,
+		Env:             mergeEnv(defaultEnv(s.Parser), target.Env),
+		Runs:            s.Runs,
+		Cache:           cache,
+	}
+
+	// A SuiteRunner (e.g. remote exec) runs the whole job out-of-process and
+	// returns the assembled result; every other runner is driven by RunJob.
+	var res *archbench.RunResult
+	if r.Capabilities().Suite {
+		sr, ok := r.(archbench.SuiteRunner)
+		if !ok {
+			return nil, false, fmt.Errorf("runner for %q reports Suite but does not implement SuiteRunner", target.Name)
+		}
+		res, err = sr.RunSuite(ctx, job)
+	} else {
+		res, err = RunJob(ctx, r, p, job)
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("run %q: %w", target.Name, err)
+	}
+
+	res.Target = target.Name
+	return res, emulated(target, r.Capabilities()), nil
+}
+
+// RunJob prepares the runner, runs the job's setup and run groups in order, and
+// returns the assembled RunResult, owning the runner lifecycle including
+// Cleanup. The local engine path and the remote `archbench exec` worker share
+// it, so a suite runs identically whether driven in-process or on a host. It
+// does not set RunResult.Target; the caller, which knows the target name, does.
+func RunJob(ctx context.Context, r archbench.Runner, p archbench.Parser, job archbench.Job) (*archbench.RunResult, error) {
 	if err := r.Prepare(ctx); err != nil {
-		return nil, false, fmt.Errorf("prepare %q: %w", target.Name, err)
+		return nil, fmt.Errorf("prepare: %w", err)
 	}
 	// Clean up with an independent context so teardown still runs (e.g. removing
 	// the remote workdir) even when ctx was cancelled by a signal or timeout.
@@ -57,32 +96,27 @@ func (e *Engine) Run(ctx context.Context, s *archbench.Spec, target archbench.Ta
 		_ = r.Cleanup(cleanupCtx)
 	}()
 
-	// baseEnv is the parser's cache wiring overlaid with the target's env; it
-	// applies to setup and to every run, with each run's own env layered on top.
-	baseEnv := mergeEnv(defaultEnv(s.Parser), target.Env)
-
-	if len(target.Setup) > 0 {
-		if err := r.Setup(ctx, target.Setup, baseEnv); err != nil {
-			return nil, false, fmt.Errorf("setup %q: %w", target.Name, err)
+	if len(job.Setup) > 0 {
+		if err := r.Setup(ctx, job.Setup, job.Env); err != nil {
+			return nil, fmt.Errorf("setup: %w", err)
 		}
 	}
 
 	started := time.Now()
 	res := &archbench.RunResult{
-		Target:  target.Name,
-		Mode:    mode,
+		Mode:    job.Mode,
 		Started: started,
-		Runs:    make([]archbench.ScenarioResult, 0, len(s.Runs)),
+		Runs:    make([]archbench.ScenarioResult, 0, len(job.Runs)),
 	}
 
-	for _, specRun := range s.Runs {
+	for _, specRun := range job.Runs {
 		run := specRun
-		run.Env = mergeEnv(baseEnv, run.Env)
+		run.Env = mergeEnv(job.Env, run.Env)
 
 		runStarted := time.Now()
 		out, err := r.Execute(ctx, run)
 		if err != nil {
-			return nil, false, fmt.Errorf("execute %q/%q: %w", target.Name, run.Name, err)
+			return nil, fmt.Errorf("execute %q: %w", run.Name, err)
 		}
 		if res.Metadata.Arch == "" && res.Metadata.OS == "" {
 			res.Metadata = archbench.Metadata{
@@ -97,9 +131,9 @@ func (e *Engine) Run(ctx context.Context, s *archbench.Spec, target archbench.Ta
 			res.Metadata.Toolchain = mergeEnv(res.Metadata.Toolchain, out.Toolchain)
 		}
 
-		parsed, err := p.Parse(mode, out)
+		parsed, err := p.Parse(job.Mode, out)
 		if err != nil {
-			return nil, false, fmt.Errorf("parse %q/%q: %w", target.Name, run.Name, err)
+			return nil, fmt.Errorf("parse %q: %w", run.Name, err)
 		}
 		res.Metadata.Toolchain = mergeEnv(res.Metadata.Toolchain, parsed.Toolchain)
 
@@ -120,7 +154,7 @@ func (e *Engine) Run(ctx context.Context, s *archbench.Spec, target archbench.Ta
 		res.Runs = append(res.Runs, scenario)
 	}
 	res.DurationSeconds = time.Since(started).Seconds()
-	return res, emulated(target, r.Capabilities()), nil
+	return res, nil
 }
 
 func (e *Engine) runnerFor(t archbench.Target, cache archbench.Cache) (archbench.Runner, error) {

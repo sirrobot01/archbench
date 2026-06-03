@@ -54,6 +54,17 @@ type Target struct {
 	// values may be secrets and are never exposed on a command line.
 	Env map[string]string `yaml:"env,omitempty"`
 
+	// Exec runs the suite through a remote `archbench exec` worker instead of
+	// driving raw shell commands: the project is uploaded, the runs execute on
+	// the host, and a structured result is returned. The remote side detects
+	// its own toolchain and parses output where the commands run. SSH only.
+	Exec bool `yaml:"exec,omitempty"`
+
+	// ExecBinary is the path to the archbench binary on the host, used with
+	// Exec. When empty, archbench is located on the host (or installed with
+	// `go install` when the orchestrator is a released version).
+	ExecBinary string `yaml:"execBinary,omitempty"`
+
 	// Host may be a hostname or a ~/.ssh/config alias. User, Port, Key and
 	// ProxyJump are optional overrides; anything left unset is resolved by the
 	// system ssh client and the user's ssh config.
@@ -76,10 +87,10 @@ type Target struct {
 
 // Run holds one named command group executed on each target.
 type Run struct {
-	Name    string            `yaml:"name,omitempty"`
-	Setup   []string          `yaml:"setup,omitempty"`
-	Command string            `yaml:"command"`
-	Env     map[string]string `yaml:"env,omitempty"`
+	Name    string            `yaml:"name,omitempty" json:"name,omitempty"`
+	Setup   []string          `yaml:"setup,omitempty" json:"setup,omitempty"`
+	Command string            `yaml:"command" json:"command"`
+	Env     map[string]string `yaml:"env,omitempty" json:"env,omitempty"`
 }
 
 // EffectiveMode returns the mode, defaulting to ModeBench.
@@ -169,6 +180,13 @@ func (s *Spec) validate() error {
 			}
 		default:
 			return fmt.Errorf("target %q: unknown type %q", t.Name, t.Type)
+		}
+
+		if t.Exec && t.Type != TargetSSH {
+			return fmt.Errorf("target %q: exec is only supported for ssh targets", t.Name)
+		}
+		if t.ExecBinary != "" && !t.Exec {
+			return fmt.Errorf("target %q: execBinary requires exec: true", t.Name)
 		}
 	}
 	return nil

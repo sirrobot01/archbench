@@ -15,9 +15,11 @@ package ssh
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -31,13 +33,19 @@ import (
 
 const insecureEnv = "ARCHBENCH_SSH_INSECURE"
 
-var _ archbench.Runner = (*Runner)(nil)
+var (
+	_ archbench.Runner      = (*Runner)(nil)
+	_ archbench.SuiteRunner = (*Runner)(nil)
+)
 
 // Runner executes a run on a remote host over SSH.
 type Runner struct {
 	target archbench.Target
 	dir    string
 	cache  archbench.Cache
+
+	exec       bool
+	execBinary string
 
 	workdir    string
 	cacheDir   string
@@ -46,11 +54,19 @@ type Runner struct {
 
 // New returns an SSH runner for target, syncing the local project at dir.
 func New(target archbench.Target, dir string, cache archbench.Cache) *Runner {
-	return &Runner{target: target, dir: dir, cache: cache}
+	return &Runner{
+		target:     target,
+		dir:        dir,
+		cache:      cache,
+		exec:       target.Exec,
+		execBinary: target.ExecBinary,
+	}
 }
 
+// Capabilities reports Suite when the target opts into exec mode, so the engine
+// delegates the whole job to RunSuite instead of driving per-run Execute.
 func (r *Runner) Capabilities() archbench.Capabilities {
-	return archbench.Capabilities{Remote: true}
+	return archbench.Capabilities{Remote: true, Suite: r.exec}
 }
 
 // Prepare creates an isolated remote work directory and uploads the project.
@@ -164,6 +180,130 @@ func (r *Runner) Cleanup(ctx context.Context) error {
 	return nil
 }
 
+// RunSuite executes the whole job on the host through a remote `archbench exec`
+// worker: it uploads the project, resolves an archbench binary, pipes the job
+// in on stdin, and decodes the RunResult the worker emits on stdout. The remote
+// detects its own toolchain and parses output, so the orchestrator never scrapes
+// raw test output for this path.
+func (r *Runner) RunSuite(ctx context.Context, job archbench.Job) (*archbench.RunResult, error) {
+	if err := r.Prepare(ctx); err != nil {
+		return nil, err
+	}
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_ = r.Cleanup(cleanupCtx)
+	}()
+
+	// Source the target env for bootstrap probes and the worker, so locating go
+	// and archbench honors the target's PATH the same way the runs will.
+	if len(job.Env) > 0 {
+		if err := r.writeEnvFile(ctx, job.Env); err != nil {
+			return nil, fmt.Errorf("write env file: %w", err)
+		}
+		r.envSourced = true
+	}
+
+	bin, err := r.bootstrap(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	payload, err := json.Marshal(job)
+	if err != nil {
+		return nil, fmt.Errorf("encode job: %w", err)
+	}
+
+	stdout, stderr, err := r.runIO(ctx, r.inWorkdir(shellQuote(bin)+" exec --dir ."), string(payload))
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		return nil, fmt.Errorf("remote exec: %w%s", err, withStderr(stderr))
+	}
+
+	var res archbench.RunResult
+	if err := json.Unmarshal([]byte(stdout), &res); err != nil {
+		return nil, fmt.Errorf("decode result: %w%s", err, withStderr(stderr))
+	}
+	return &res, nil
+}
+
+// bootstrap resolves the path to an archbench binary on the host. An explicit
+// execBinary wins; otherwise it looks on PATH and in the Go bin directory, and
+// finally installs one with `go install` when the orchestrator is a released
+// version. Probes run through inWorkdir so they see the target env.
+func (r *Runner) bootstrap(ctx context.Context) (string, error) {
+	if r.execBinary != "" {
+		return r.execBinary, nil
+	}
+	if p := r.probe(ctx, "command -v archbench"); p != "" {
+		return p, nil
+	}
+
+	gobin := r.goBin(ctx)
+	candidate := ""
+	if gobin != "" {
+		candidate = gobin + "/archbench"
+		if r.probe(ctx, "test -x "+shellQuote(candidate)+" && printf %s "+shellQuote(candidate)) != "" {
+			return candidate, nil
+		}
+	}
+
+	path, version := moduleRef()
+	if version == "" {
+		return "", fmt.Errorf("archbench not found on %s and this build has no release version to install from; "+
+			"install archbench on the host or set execBinary", r.target.Host)
+	}
+	ref := path + "/cmd/archbench@" + version
+	if _, stderr, err := r.run(ctx, r.inWorkdir("go install "+ref)); err != nil {
+		return "", fmt.Errorf("go install %s on %s: %w%s", ref, r.target.Host, err, withStderr(stderr))
+	}
+	if candidate == "" {
+		if gobin = r.goBin(ctx); gobin == "" {
+			return "", fmt.Errorf("cannot resolve the go bin directory on %s after install", r.target.Host)
+		}
+		candidate = gobin + "/archbench"
+	}
+	return candidate, nil
+}
+
+// goBin returns the directory `go install` writes binaries to on the host.
+func (r *Runner) goBin(ctx context.Context) string {
+	if b := r.probe(ctx, "go env GOBIN"); b != "" {
+		return b
+	}
+	if p := r.probe(ctx, "go env GOPATH"); p != "" {
+		return p + "/bin"
+	}
+	return ""
+}
+
+// probe runs a command with the target env sourced and returns trimmed stdout,
+// or "" on any failure.
+func (r *Runner) probe(ctx context.Context, cmd string) string {
+	out, _, err := r.run(ctx, r.inWorkdir(cmd))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(out)
+}
+
+// moduleRef reports the archbench module path and release version this binary
+// was built from, for installing a matching worker on the host. The version is
+// empty for an untagged local build, which cannot be reproduced with `go install`.
+func moduleRef() (path, version string) {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "", ""
+	}
+	v := info.Main.Version
+	if v == "" || v == "(devel)" {
+		return info.Main.Path, ""
+	}
+	return info.Main.Path, v
+}
+
 // upload packages the local project and extracts it into the work directory by
 // streaming a tar.gz into a remote `tar xzf -`.
 func (r *Runner) upload(ctx context.Context) error {
@@ -215,6 +355,19 @@ func (r *Runner) runInput(ctx context.Context, remote, input string) error {
 		return fmt.Errorf("%w%s", err, withStderr(se.String()))
 	}
 	return nil
+}
+
+// runIO executes a remote command feeding input on stdin and capturing stdout
+// and stderr -- used to pipe a Job to the worker and read back its RunResult.
+func (r *Runner) runIO(ctx context.Context, remote, input string) (stdout, stderr string, err error) {
+	cmd := exec.CommandContext(ctx, "ssh", append(r.sshArgs(), remote)...)
+	setpgKill(cmd)
+	cmd.Stdin = strings.NewReader(input)
+	var so, se bytes.Buffer
+	cmd.Stdout = &so
+	cmd.Stderr = &se
+	err = cmd.Run()
+	return so.String(), se.String(), err
 }
 
 // sshArgs builds the ssh flags. Explicit target fields override the user's

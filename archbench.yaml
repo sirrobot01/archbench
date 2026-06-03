@@ -1,0 +1,24 @@
+name: archbench-self
+
+# ArchBench benchmarking its own hot paths. The runs target the benchmarks in
+# internal/parser and internal/engine -- the in-process CPU work every `run`
+# does once the subprocess output comes back. Use this to catch regressions in
+# the parse/assemble path across changes.
+mode: bench
+
+targets:
+  - name: local
+    type: local
+
+  - name: ci
+    type: github-actions
+    runsOn: ubuntu-latest
+
+runs:
+  - name: parser
+    command: go test ./internal/parser/... -run '^$' -bench=. -benchmem -count=10
+
+  - name: engine
+    command: go test ./internal/engine/ -run '^$' -bench=. -benchmem -count=10
+
+parser: go-test

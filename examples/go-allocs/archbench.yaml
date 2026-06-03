@@ -1,0 +1,13 @@
+name: go-allocs
+
+mode: bench
+
+targets:
+  - name: local
+    type: local
+
+runs:
+  - name: join
+    command: go test ./... -run '^$' -bench=. -benchmem -count=5
+
+parser: go-test

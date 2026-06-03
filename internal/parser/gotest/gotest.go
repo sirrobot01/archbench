@@ -5,7 +5,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -35,9 +34,6 @@ func (p parser) Parse(mode archbench.Mode, out *archbench.Output) (*archbench.Pa
 	}
 }
 
-// e.g. "BenchmarkReadStream-8   100000   1200 ns/op   512 B/op   2 allocs/op"
-var benchLine = regexp.MustCompile(`^(Benchmark\S+?)(?:-\d+)?\s+(\d+)\s+(.*)$`)
-
 func (parser) parseBench(out *archbench.Output) (*archbench.Parsed, error) {
 	type agg struct {
 		iterations int
@@ -52,19 +48,29 @@ func (parser) parseBench(out *archbench.Output) (*archbench.Parsed, error) {
 	for sc.Scan() {
 		line := sc.Text()
 		if strings.HasPrefix(line, "pkg: ") {
-			pkg = strings.TrimSpace(strings.TrimPrefix(line, "pkg: "))
+			pkg = strings.TrimSpace(line[len("pkg: "):])
 			continue
 		}
 
-		m := benchLine.FindStringSubmatch(line)
-		if m == nil {
+		// A benchmark line is "BenchmarkName-8 <iters> <val> <unit> ...": the
+		// name, the iteration count, then value/unit metric pairs. Splitting on
+		// fields avoids a regex match and a throwaway metrics map per line.
+		if !strings.HasPrefix(line, "Benchmark") {
 			continue
 		}
-		metrics := parseMetrics(m[3])
-		if len(metrics) == 0 {
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
 			continue
 		}
-		name := scopedName(pkg, m[1])
+		iters, err := strconv.Atoi(fields[1])
+		if err != nil {
+			continue
+		}
+		if !hasMetric(fields[2:]) {
+			continue
+		}
+
+		name := scopedName(pkg, trimProcSuffix(fields[0]))
 		a := byName[name]
 		if a == nil {
 			a = &agg{sums: map[string]float64{}}
@@ -72,10 +78,8 @@ func (parser) parseBench(out *archbench.Output) (*archbench.Parsed, error) {
 			order = append(order, name)
 		}
 		a.n++
-		a.iterations, _ = strconv.Atoi(m[2])
-		for k, v := range metrics {
-			a.sums[k] += v
-		}
+		a.iterations = iters
+		addMetrics(fields[2:], a.sums)
 	}
 	if err := sc.Err(); err != nil {
 		return nil, fmt.Errorf("go-test: scan: %w", err)
@@ -98,29 +102,59 @@ func (parser) parseBench(out *archbench.Output) (*archbench.Parsed, error) {
 	return &archbench.Parsed{Benchmarks: benches}, nil
 }
 
-// parseMetrics reads pairs like "1200 ns/op 512 B/op" into metric keys.
-func parseMetrics(s string) map[string]float64 {
-	fields := strings.Fields(s)
-	metrics := map[string]float64{}
+// hasMetric reports whether fields holds at least one value/unit metric pair,
+// so a benchmark line with no parseable metrics is skipped before it records an
+// empty benchmark.
+func hasMetric(fields []string) bool {
+	for i := 0; i+1 < len(fields); i += 2 {
+		if _, err := strconv.ParseFloat(fields[i], 64); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// addMetrics adds value/unit pairs like "1200 ns/op 512 B/op" into sums.
+func addMetrics(fields []string, sums map[string]float64) {
 	for i := 0; i+1 < len(fields); i += 2 {
 		val, err := strconv.ParseFloat(fields[i], 64)
 		if err != nil {
 			continue
 		}
-		switch fields[i+1] {
-		case "ns/op":
-			metrics[archbench.MetricNsPerOp] = val
-		case "B/op":
-			metrics[archbench.MetricBytesPerOp] = val
-		case "allocs/op":
-			metrics[archbench.MetricAllocsPerOp] = val
-		case "MB/s":
-			metrics[archbench.MetricMBPerSec] = val
-		default:
-			metrics[fields[i+1]] = val // custom b.ReportMetric unit
+		sums[metricKey(fields[i+1])] += val
+	}
+}
+
+// metricKey maps a go test unit to its well-known metric key, passing through
+// custom b.ReportMetric units unchanged.
+func metricKey(unit string) string {
+	switch unit {
+	case "ns/op":
+		return archbench.MetricNsPerOp
+	case "B/op":
+		return archbench.MetricBytesPerOp
+	case "allocs/op":
+		return archbench.MetricAllocsPerOp
+	case "MB/s":
+		return archbench.MetricMBPerSec
+	default:
+		return unit
+	}
+}
+
+// trimProcSuffix strips the "-8" GOMAXPROCS suffix go test appends to a
+// benchmark name, leaving names without one untouched.
+func trimProcSuffix(name string) string {
+	i := strings.LastIndexByte(name, '-')
+	if i < 0 || i+1 == len(name) {
+		return name
+	}
+	for _, r := range name[i+1:] {
+		if r < '0' || r > '9' {
+			return name
 		}
 	}
-	return metrics
+	return name[:i]
 }
 
 // testEvent is a subset of a `go test -json` event.

@@ -12,7 +12,8 @@ import (
 )
 
 func newCompareCmd() *cobra.Command {
-	return &cobra.Command{
+	var threshold float64
+	cmd := &cobra.Command{
 		Use:   "compare <baseline.json> <candidate.json>",
 		Short: "Compare two result artifacts",
 		Args:  cobra.ExactArgs(2),
@@ -25,9 +26,27 @@ func newCompareCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return engine.Compare(cmd, a, b)
+			if err := engine.Compare(cmd, a, b); err != nil {
+				return err
+			}
+			if threshold <= 0 {
+				return nil
+			}
+			regs := engine.BenchRegressions(a, b, threshold)
+			if len(regs) == 0 {
+				return nil
+			}
+			cmd.PrintErrf("\n%d benchmark(s) regressed beyond %.1f%%:\n", len(regs), threshold)
+			for _, r := range regs {
+				cmd.PrintErrf("  %s/%s: %.0f → %.0f ns/op (+%.1f%%)\n",
+					r.Run, r.Benchmark, r.Baseline, r.Candidate, r.Percent)
+			}
+			return fmt.Errorf("benchmark regression threshold exceeded")
 		},
 	}
+	cmd.Flags().Float64Var(&threshold, "threshold", 0,
+		"fail if any benchmark's ns/op regresses by more than this percent (0 = never fail)")
+	return cmd
 }
 
 func readResult(path string) (*archbench.RunResult, error) {
