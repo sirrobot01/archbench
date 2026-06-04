@@ -33,7 +33,7 @@ jobs:
 
       - name: Build archbench
         run: |
-          go build -o "$RUNNER_TEMP/bin/archbench" ./cmd/archbench
+          go build -o "$RUNNER_TEMP/bin/archbench" .
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
       - name: Run archbench
@@ -64,7 +64,7 @@ jobs:
 
       - name: Build archbench
         run: |
-          go build -o "$RUNNER_TEMP/bin/archbench" ./cmd/archbench
+          go build -o "$RUNNER_TEMP/bin/archbench" .
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
       - name: Benchmark PR head

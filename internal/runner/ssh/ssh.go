@@ -255,7 +255,7 @@ func (r *Runner) bootstrap(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("archbench not found on %s and this build has no release version to install from; "+
 			"install archbench on the host or set execBinary", r.target.Host)
 	}
-	ref := path + "/cmd/archbench@" + version
+	ref := path + "@" + version
 	if _, stderr, err := r.run(ctx, r.inWorkdir("go install "+ref)); err != nil {
 		return "", fmt.Errorf("go install %s on %s: %w%s", ref, r.target.Host, err, withStderr(stderr))
 	}
