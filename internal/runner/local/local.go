@@ -16,22 +16,22 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
-var _ archbench.Runner = (*Runner)(nil)
+var _ spec.Runner = (*Runner)(nil)
 
 // Runner executes a run in a local working directory.
 type Runner struct {
 	dir   string
-	cache archbench.Cache
+	cache spec.Cache
 
 	cacheDir  string
 	ephemeral bool
 }
 
 // New returns a runner rooted at dir. An empty dir uses the process directory.
-func New(dir string, cache archbench.Cache) *Runner {
+func New(dir string, cache spec.Cache) *Runner {
 	return &Runner{dir: dir, cache: cache}
 }
 
@@ -64,8 +64,8 @@ func (r *Runner) Cleanup(context.Context) error {
 	return nil
 }
 
-func (r *Runner) Capabilities() archbench.Capabilities {
-	return archbench.Capabilities{Arch: runtime.GOARCH}
+func (r *Runner) Capabilities() spec.Capabilities {
+	return spec.Capabilities{Arch: runtime.GOARCH}
 }
 
 // Setup runs target-level provisioning steps in the working directory with the
@@ -80,7 +80,7 @@ func (r *Runner) Setup(ctx context.Context, steps []string, env map[string]strin
 	return nil
 }
 
-func (r *Runner) Execute(ctx context.Context, run archbench.Run) (*archbench.Output, error) {
+func (r *Runner) Execute(ctx context.Context, run spec.Run) (*spec.Output, error) {
 	env := r.env(run.Env)
 
 	for _, step := range run.Setup {
@@ -89,7 +89,7 @@ func (r *Runner) Execute(ctx context.Context, run archbench.Run) (*archbench.Out
 		}
 	}
 
-	out := &archbench.Output{
+	out := &spec.Output{
 		Arch:      runtime.GOARCH,
 		OS:        runtime.GOOS,
 		CPU:       detectCPU(),
@@ -119,9 +119,9 @@ func (r *Runner) Execute(ctx context.Context, run archbench.Run) (*archbench.Out
 // env returns the process environment plus the cache variable and any custom
 // variables, with cache references expanded.
 func (r *Runner) env(custom map[string]string) []string {
-	env := append(os.Environ(), archbench.CacheEnv+"="+r.cacheDir)
+	env := append(os.Environ(), spec.CacheEnv+"="+r.cacheDir)
 	for _, k := range sortedKeys(custom) {
-		env = append(env, k+"="+archbench.ExpandCache(custom[k], r.cacheDir))
+		env = append(env, k+"="+spec.ExpandCache(custom[k], r.cacheDir))
 	}
 	return env
 }

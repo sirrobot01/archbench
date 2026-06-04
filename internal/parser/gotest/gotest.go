@@ -8,33 +8,33 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 type parser struct{}
 
 // New returns a parser for Go benchmark output (go test -bench) and test
 // output (go test -json).
-func New() archbench.Parser { return parser{} }
+func New() spec.Parser { return parser{} }
 
 func (parser) Name() string { return "go-test" }
 
-func (parser) Modes() []archbench.Mode {
-	return []archbench.Mode{archbench.ModeBench, archbench.ModeTest}
+func (parser) Modes() []spec.Mode {
+	return []spec.Mode{spec.ModeBench, spec.ModeTest}
 }
 
-func (p parser) Parse(mode archbench.Mode, out *archbench.Output) (*archbench.Parsed, error) {
+func (p parser) Parse(mode spec.Mode, out *spec.Output) (*spec.Parsed, error) {
 	switch mode {
-	case archbench.ModeBench:
+	case spec.ModeBench:
 		return p.parseBench(out)
-	case archbench.ModeTest:
+	case spec.ModeTest:
 		return p.parseTest(out)
 	default:
 		return nil, fmt.Errorf("go-test: unsupported mode %q", mode)
 	}
 }
 
-func (parser) parseBench(out *archbench.Output) (*archbench.Parsed, error) {
+func (parser) parseBench(out *spec.Output) (*spec.Parsed, error) {
 	type agg struct {
 		iterations int
 		sums       map[string]float64
@@ -85,21 +85,21 @@ func (parser) parseBench(out *archbench.Output) (*archbench.Parsed, error) {
 		return nil, fmt.Errorf("go-test: scan: %w", err)
 	}
 
-	benches := make([]archbench.Benchmark, 0, len(order))
+	benches := make([]spec.Benchmark, 0, len(order))
 	for _, name := range order {
 		a := byName[name]
 		metrics := make(map[string]float64, len(a.sums))
 		for k, sum := range a.sums {
 			metrics[k] = sum / float64(a.n)
 		}
-		benches = append(benches, archbench.Benchmark{
+		benches = append(benches, spec.Benchmark{
 			Name:       name,
 			Iterations: a.iterations,
 			Runs:       a.n,
 			Metrics:    metrics,
 		})
 	}
-	return &archbench.Parsed{Benchmarks: benches}, nil
+	return &spec.Parsed{Benchmarks: benches}, nil
 }
 
 // hasMetric reports whether fields holds at least one value/unit metric pair,
@@ -130,13 +130,13 @@ func addMetrics(fields []string, sums map[string]float64) {
 func metricKey(unit string) string {
 	switch unit {
 	case "ns/op":
-		return archbench.MetricNsPerOp
+		return spec.MetricNsPerOp
 	case "B/op":
-		return archbench.MetricBytesPerOp
+		return spec.MetricBytesPerOp
 	case "allocs/op":
-		return archbench.MetricAllocsPerOp
+		return spec.MetricAllocsPerOp
 	case "MB/s":
-		return archbench.MetricMBPerSec
+		return spec.MetricMBPerSec
 	default:
 		return unit
 	}
@@ -166,9 +166,9 @@ type testEvent struct {
 	Output  string
 }
 
-func (parser) parseTest(out *archbench.Output) (*archbench.Parsed, error) {
+func (parser) parseTest(out *spec.Output) (*spec.Parsed, error) {
 	type acc struct {
-		status  archbench.TestStatus
+		status  spec.TestStatus
 		elapsed float64
 		output  strings.Builder
 	}
@@ -188,17 +188,17 @@ func (parser) parseTest(out *archbench.Output) (*archbench.Parsed, error) {
 		name := scopedName(ev.Package, ev.Test)
 		a := byName[name]
 		if a == nil {
-			a = &acc{status: archbench.StatusFail}
+			a = &acc{status: spec.StatusFail}
 			byName[name] = a
 			order = append(order, name)
 		}
 		switch ev.Action {
 		case "pass":
-			a.status, a.elapsed = archbench.StatusPass, ev.Elapsed
+			a.status, a.elapsed = spec.StatusPass, ev.Elapsed
 		case "fail":
-			a.status, a.elapsed = archbench.StatusFail, ev.Elapsed
+			a.status, a.elapsed = spec.StatusFail, ev.Elapsed
 		case "skip":
-			a.status, a.elapsed = archbench.StatusSkip, ev.Elapsed
+			a.status, a.elapsed = spec.StatusSkip, ev.Elapsed
 		case "output":
 			a.output.WriteString(ev.Output)
 		}
@@ -207,16 +207,16 @@ func (parser) parseTest(out *archbench.Output) (*archbench.Parsed, error) {
 		return nil, fmt.Errorf("go-test: scan: %w", err)
 	}
 
-	tests := make([]archbench.Test, 0, len(order))
+	tests := make([]spec.Test, 0, len(order))
 	for _, name := range order {
 		a := byName[name]
-		t := archbench.Test{Name: name, Status: a.status, ElapsedSeconds: a.elapsed}
-		if a.status != archbench.StatusPass {
+		t := spec.Test{Name: name, Status: a.status, ElapsedSeconds: a.elapsed}
+		if a.status != spec.StatusPass {
 			t.Output = strings.TrimSpace(a.output.String())
 		}
 		tests = append(tests, t)
 	}
-	return &archbench.Parsed{Tests: tests}, nil
+	return &spec.Parsed{Tests: tests}, nil
 }
 
 func scopedName(pkg, name string) string {

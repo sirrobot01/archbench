@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 // image is small, ships a POSIX shell plus tar, and exists for both amd64 and
@@ -33,7 +33,7 @@ func TestIntegrationRealDocker(t *testing.T) {
 	writeFile(t, project, "hello.txt", "real docker\n")
 	writeFile(t, project, "nested/data.txt", "nested payload\n")
 
-	r := New(archbench.Target{Type: archbench.TargetDocker, Image: image}, project, archbench.Cache{})
+	r := New(spec.Target{Type: spec.TargetDocker, Image: image}, project, spec.Cache{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
@@ -44,7 +44,7 @@ func TestIntegrationRealDocker(t *testing.T) {
 	container := r.container
 	t.Cleanup(func() { _ = r.Cleanup(ctx) })
 
-	out, err := r.Execute(ctx, archbench.Run{
+	out, err := r.Execute(ctx, spec.Run{
 		Setup:   []string{"test -f hello.txt", "test -f nested/data.txt"},
 		Command: `cat hello.txt nested/data.txt; echo "secret=$TOKEN"; echo "cache=$ARCHBENCH_CACHE"`,
 		Env:     map[string]string{"TOKEN": "s3cr3t"},
@@ -67,7 +67,7 @@ func TestIntegrationRealDocker(t *testing.T) {
 	}
 
 	// A non-zero command exit is a result, not a runner error.
-	fail, err := r.Execute(ctx, archbench.Run{Command: "echo boom; exit 3"})
+	fail, err := r.Execute(ctx, spec.Run{Command: "echo boom; exit 3"})
 	if err != nil {
 		t.Fatalf("non-zero exit should not be a runner error: %v", err)
 	}

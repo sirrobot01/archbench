@@ -1,4 +1,4 @@
-package archbench
+package spec
 
 import "fmt"
 

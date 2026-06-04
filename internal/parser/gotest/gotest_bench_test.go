@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 // benchOutput builds realistic `go test -bench -benchmem -count=count` stdout
@@ -48,12 +48,12 @@ func testOutput(pkgs, tests int) string {
 
 func BenchmarkParseBench(b *testing.B) {
 	p := New()
-	out := &archbench.Output{Stdout: benchOutput(8, 20, 10)}
+	out := &spec.Output{Stdout: benchOutput(8, 20, 10)}
 	b.ReportAllocs()
 	b.SetBytes(int64(len(out.Stdout)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parsed, err := p.Parse(archbench.ModeBench, out)
+		parsed, err := p.Parse(spec.ModeBench, out)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -65,12 +65,12 @@ func BenchmarkParseBench(b *testing.B) {
 
 func BenchmarkParseTest(b *testing.B) {
 	p := New()
-	out := &archbench.Output{Stdout: testOutput(8, 50)}
+	out := &spec.Output{Stdout: testOutput(8, 50)}
 	b.ReportAllocs()
 	b.SetBytes(int64(len(out.Stdout)))
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		parsed, err := p.Parse(archbench.ModeTest, out)
+		parsed, err := p.Parse(spec.ModeTest, out)
 		if err != nil {
 			b.Fatal(err)
 		}

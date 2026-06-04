@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 func TestCompareBench(t *testing.T) {
@@ -30,28 +30,28 @@ func TestCompareBench(t *testing.T) {
 
 func TestCompareBenchReportsNewAndRemovedItems(t *testing.T) {
 	baseline := benchResult("arm64", 100)
-	baseline.Runs[0].Benchmarks = append(baseline.Runs[0].Benchmarks, archbench.Benchmark{
+	baseline.Runs[0].Benchmarks = append(baseline.Runs[0].Benchmarks, spec.Benchmark{
 		Name:    "BenchmarkRemoved",
-		Metrics: map[string]float64{archbench.MetricNsPerOp: 200},
+		Metrics: map[string]float64{spec.MetricNsPerOp: 200},
 	})
-	baseline.Runs = append(baseline.Runs, archbench.ScenarioResult{
+	baseline.Runs = append(baseline.Runs, spec.ScenarioResult{
 		Name: "removed-run",
-		Benchmarks: []archbench.Benchmark{{
+		Benchmarks: []spec.Benchmark{{
 			Name:    "BenchmarkOnlyBaseline",
-			Metrics: map[string]float64{archbench.MetricNsPerOp: 300},
+			Metrics: map[string]float64{spec.MetricNsPerOp: 300},
 		}},
 	})
 
 	candidate := benchResult("amd64", 100)
-	candidate.Runs[0].Benchmarks = append(candidate.Runs[0].Benchmarks, archbench.Benchmark{
+	candidate.Runs[0].Benchmarks = append(candidate.Runs[0].Benchmarks, spec.Benchmark{
 		Name:    "BenchmarkNew",
-		Metrics: map[string]float64{archbench.MetricNsPerOp: 400},
+		Metrics: map[string]float64{spec.MetricNsPerOp: 400},
 	})
-	candidate.Runs = append(candidate.Runs, archbench.ScenarioResult{
+	candidate.Runs = append(candidate.Runs, spec.ScenarioResult{
 		Name: "new-run",
-		Benchmarks: []archbench.Benchmark{{
+		Benchmarks: []spec.Benchmark{{
 			Name:    "BenchmarkOnlyCandidate",
-			Metrics: map[string]float64{archbench.MetricNsPerOp: 500},
+			Metrics: map[string]float64{spec.MetricNsPerOp: 500},
 		}},
 	})
 
@@ -75,13 +75,13 @@ func TestBenchRegressions(t *testing.T) {
 	candidate := benchResult("amd64", 150)
 
 	// A benchmark that improved is not a regression.
-	baseline.Runs[0].Benchmarks = append(baseline.Runs[0].Benchmarks, archbench.Benchmark{
+	baseline.Runs[0].Benchmarks = append(baseline.Runs[0].Benchmarks, spec.Benchmark{
 		Name:    "BenchmarkFaster",
-		Metrics: map[string]float64{archbench.MetricNsPerOp: 200},
+		Metrics: map[string]float64{spec.MetricNsPerOp: 200},
 	})
-	candidate.Runs[0].Benchmarks = append(candidate.Runs[0].Benchmarks, archbench.Benchmark{
+	candidate.Runs[0].Benchmarks = append(candidate.Runs[0].Benchmarks, spec.Benchmark{
 		Name:    "BenchmarkFaster",
-		Metrics: map[string]float64{archbench.MetricNsPerOp: 100},
+		Metrics: map[string]float64{spec.MetricNsPerOp: 100},
 	})
 
 	// Below the threshold, +50% is reported but +10% is not.
@@ -107,9 +107,9 @@ func TestBenchRegressions(t *testing.T) {
 func TestBenchRegressionsSkipsUnmatched(t *testing.T) {
 	baseline := benchResult("arm64", 100)
 	candidate := benchResult("amd64", 100)
-	candidate.Runs[0].Benchmarks = append(candidate.Runs[0].Benchmarks, archbench.Benchmark{
+	candidate.Runs[0].Benchmarks = append(candidate.Runs[0].Benchmarks, spec.Benchmark{
 		Name:    "BenchmarkNew",
-		Metrics: map[string]float64{archbench.MetricNsPerOp: 9999},
+		Metrics: map[string]float64{spec.MetricNsPerOp: 9999},
 	})
 
 	if regs := BenchRegressions(baseline, candidate, 1); len(regs) != 0 {
@@ -120,8 +120,8 @@ func TestBenchRegressionsSkipsUnmatched(t *testing.T) {
 func TestCompareTestDivergence(t *testing.T) {
 	cmd, out := captureCommand()
 	err := Compare(cmd,
-		testResult("arm64", archbench.StatusPass),
-		testResult("amd64", archbench.StatusFail),
+		testResult("arm64", spec.StatusPass),
+		testResult("amd64", spec.StatusFail),
 	)
 	if err != nil {
 		t.Fatalf("Compare: %v", err)
@@ -136,21 +136,21 @@ func TestCompareTestDivergence(t *testing.T) {
 }
 
 func TestCompareTestReportsNewAndRemovedRuns(t *testing.T) {
-	baseline := testResult("arm64", archbench.StatusPass)
-	baseline.Runs = append(baseline.Runs, archbench.ScenarioResult{
+	baseline := testResult("arm64", spec.StatusPass)
+	baseline.Runs = append(baseline.Runs, spec.ScenarioResult{
 		Name: "removed-run",
-		Tests: []archbench.Test{{
+		Tests: []spec.Test{{
 			Name:   "TestOnlyBaseline",
-			Status: archbench.StatusPass,
+			Status: spec.StatusPass,
 		}},
 	})
 
-	candidate := testResult("amd64", archbench.StatusPass)
-	candidate.Runs = append(candidate.Runs, archbench.ScenarioResult{
+	candidate := testResult("amd64", spec.StatusPass)
+	candidate.Runs = append(candidate.Runs, spec.ScenarioResult{
 		Name: "new-run",
-		Tests: []archbench.Test{{
+		Tests: []spec.Test{{
 			Name:   "TestOnlyCandidate",
-			Status: archbench.StatusPass,
+			Status: spec.StatusPass,
 		}},
 	})
 
@@ -172,11 +172,11 @@ func TestCompareTestReportsNewAndRemovedRuns(t *testing.T) {
 // parsed benchmarks reports the failure and its reason, rather than the benign
 // "No benchmarks parsed." that hid command-not-found errors.
 func TestTerminalSurfacesFailedRun(t *testing.T) {
-	r := &archbench.RunResult{
+	r := &spec.RunResult{
 		Target:   "remote",
-		Mode:     archbench.ModeBench,
-		Metadata: archbench.Metadata{OS: "linux", Arch: "amd64"},
-		Runs: []archbench.ScenarioResult{{
+		Mode:     spec.ModeBench,
+		Metadata: spec.Metadata{OS: "linux", Arch: "amd64"},
+		Runs: []spec.ScenarioResult{{
 			Name:     "small-sum",
 			Command:  "go test ./... -bench=.",
 			ExitCode: 127,
@@ -205,37 +205,37 @@ func captureCommand() (*cobra.Command, *bytes.Buffer) {
 	return cmd, &out
 }
 
-func benchResult(target string, ns float64) *archbench.RunResult {
-	return &archbench.RunResult{
+func benchResult(target string, ns float64) *spec.RunResult {
+	return &spec.RunResult{
 		Target: target,
-		Mode:   archbench.ModeBench,
-		Metadata: archbench.Metadata{
+		Mode:   spec.ModeBench,
+		Metadata: spec.Metadata{
 			Arch: target,
 		},
-		Runs: []archbench.ScenarioResult{{
+		Runs: []spec.ScenarioResult{{
 			Name:    "stream",
 			Command: "go test ./stream -bench=.",
-			Benchmarks: []archbench.Benchmark{{
+			Benchmarks: []spec.Benchmark{{
 				Name: "BenchmarkRead",
 				Metrics: map[string]float64{
-					archbench.MetricNsPerOp: ns,
+					spec.MetricNsPerOp: ns,
 				},
 			}},
 		}},
 	}
 }
 
-func testResult(target string, status archbench.TestStatus) *archbench.RunResult {
-	return &archbench.RunResult{
+func testResult(target string, status spec.TestStatus) *spec.RunResult {
+	return &spec.RunResult{
 		Target: target,
-		Mode:   archbench.ModeTest,
-		Metadata: archbench.Metadata{
+		Mode:   spec.ModeTest,
+		Metadata: spec.Metadata{
 			Arch: target,
 		},
-		Runs: []archbench.ScenarioResult{{
+		Runs: []spec.ScenarioResult{{
 			Name:    "race",
 			Command: "go test ./... -json",
-			Tests: []archbench.Test{{
+			Tests: []spec.Test{{
 				Name:   "TestRead",
 				Status: status,
 			}},

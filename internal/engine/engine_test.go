@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 func TestRunExecutesNamedRunsSequentially(t *testing.T) {
@@ -14,18 +14,18 @@ func TestRunExecutesNamedRunsSequentially(t *testing.T) {
 		t.Skip("local runner requires a POSIX shell")
 	}
 
-	reg := archbench.NewRegistry()
+	reg := spec.NewRegistry()
 	reg.Register(stdoutParser{})
 	eng := New(reg, t.TempDir(), false)
-	spec := &archbench.Spec{
+	spec := &spec.Spec{
 		Name:   "demo",
-		Mode:   archbench.ModeBench,
+		Mode:   spec.ModeBench,
 		Parser: "stdout",
-		Targets: []archbench.Target{{
+		Targets: []spec.Target{{
 			Name: "local",
-			Type: archbench.TargetLocal,
+			Type: spec.TargetLocal,
 		}},
-		Runs: []archbench.Run{
+		Runs: []spec.Run{
 			{Name: "first", Command: "printf first"},
 			{Name: "second", Command: "printf second"},
 		},
@@ -56,19 +56,19 @@ func TestRunTargetSetup(t *testing.T) {
 		t.Skip("local runner requires a POSIX shell")
 	}
 
-	reg := archbench.NewRegistry()
+	reg := spec.NewRegistry()
 	reg.Register(stdoutParser{})
 	eng := New(reg, t.TempDir(), false)
-	spec := &archbench.Spec{
+	spec := &spec.Spec{
 		Name:   "demo",
-		Mode:   archbench.ModeBench,
+		Mode:   spec.ModeBench,
 		Parser: "stdout",
-		Targets: []archbench.Target{{
+		Targets: []spec.Target{{
 			Name:  "local",
-			Type:  archbench.TargetLocal,
+			Type:  spec.TargetLocal,
 			Setup: []string{"printf provisioned > marker"},
 		}},
-		Runs: []archbench.Run{
+		Runs: []spec.Run{
 			{Name: "read", Command: "cat marker"},
 		},
 	}
@@ -89,19 +89,19 @@ func TestRunTargetEnv(t *testing.T) {
 		t.Skip("local runner requires a POSIX shell")
 	}
 
-	reg := archbench.NewRegistry()
+	reg := spec.NewRegistry()
 	reg.Register(stdoutParser{})
 	eng := New(reg, t.TempDir(), false)
-	spec := &archbench.Spec{
+	spec := &spec.Spec{
 		Name:   "demo",
-		Mode:   archbench.ModeBench,
+		Mode:   spec.ModeBench,
 		Parser: "stdout",
-		Targets: []archbench.Target{{
+		Targets: []spec.Target{{
 			Name: "local",
-			Type: archbench.TargetLocal,
+			Type: spec.TargetLocal,
 			Env:  map[string]string{"FOO": "base"},
 		}},
-		Runs: []archbench.Run{
+		Runs: []spec.Run{
 			{Name: "inherits", Command: `printf %s "$FOO"`},
 			{Name: "overrides", Command: `printf %s "$FOO"`, Env: map[string]string{"FOO": "run"}},
 		},
@@ -125,17 +125,17 @@ func (stdoutParser) Name() string {
 	return "stdout"
 }
 
-func (stdoutParser) Modes() []archbench.Mode {
-	return []archbench.Mode{archbench.ModeBench}
+func (stdoutParser) Modes() []spec.Mode {
+	return []spec.Mode{spec.ModeBench}
 }
 
-func (stdoutParser) Parse(_ archbench.Mode, out *archbench.Output) (*archbench.Parsed, error) {
+func (stdoutParser) Parse(_ spec.Mode, out *spec.Output) (*spec.Parsed, error) {
 	name := strings.TrimSpace(out.Stdout)
-	return &archbench.Parsed{
-		Benchmarks: []archbench.Benchmark{{
+	return &spec.Parsed{
+		Benchmarks: []spec.Benchmark{{
 			Name: name,
 			Metrics: map[string]float64{
-				archbench.MetricNsPerOp: float64(len(name)),
+				spec.MetricNsPerOp: float64(len(name)),
 			},
 		}},
 	}, nil

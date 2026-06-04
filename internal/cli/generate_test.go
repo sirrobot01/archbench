@@ -4,17 +4,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 func TestGenerateWorkflow(t *testing.T) {
-	s := &archbench.Spec{
+	s := &spec.Spec{
 		Name:   "svc-bench",
 		Parser: "go-test",
-		Targets: []archbench.Target{
-			{Name: "local", Type: archbench.TargetLocal},
-			{Name: "ci-amd64", Type: archbench.TargetGitHubActions, RunsOn: "ubuntu-latest"},
-			{Name: "ci-arm64", Type: archbench.TargetGitHubActions, RunsOn: "ubuntu-24.04-arm"},
+		Targets: []spec.Target{
+			{Name: "local", Type: spec.TargetLocal},
+			{Name: "ci-amd64", Type: spec.TargetGitHubActions, RunsOn: "ubuntu-latest"},
+			{Name: "ci-arm64", Type: spec.TargetGitHubActions, RunsOn: "ubuntu-24.04-arm"},
 		},
 	}
 
@@ -29,7 +29,7 @@ func TestGenerateWorkflow(t *testing.T) {
 		"runs-on: ubuntu-latest",
 		"- target: ci-arm64",
 		"runs-on: ubuntu-24.04-arm",
-		"uses: actions/setup-go@v5", // go-test parser pulls in Go setup
+		"uses: actions/setup-go@v6", // go-test parser pulls in Go setup
 		"archbench run --spec archbench.yaml --target ${{ matrix.target }}",
 	} {
 		if !strings.Contains(got, want) {
@@ -43,10 +43,10 @@ func TestGenerateWorkflow(t *testing.T) {
 }
 
 func TestGenerateWorkflowDefaultsRunsOn(t *testing.T) {
-	s := &archbench.Spec{
+	s := &spec.Spec{
 		Name:    "svc",
 		Parser:  "go-test",
-		Targets: []archbench.Target{{Name: "ci", Type: archbench.TargetGitHubActions}},
+		Targets: []spec.Target{{Name: "ci", Type: spec.TargetGitHubActions}},
 	}
 	got, err := generateWorkflow(s, "archbench.yaml")
 	if err != nil {
@@ -58,10 +58,10 @@ func TestGenerateWorkflowDefaultsRunsOn(t *testing.T) {
 }
 
 func TestGenerateWorkflowNoTargets(t *testing.T) {
-	s := &archbench.Spec{
+	s := &spec.Spec{
 		Name:    "svc",
 		Parser:  "go-test",
-		Targets: []archbench.Target{{Name: "local", Type: archbench.TargetLocal}},
+		Targets: []spec.Target{{Name: "local", Type: spec.TargetLocal}},
 	}
 	if _, err := generateWorkflow(s, "archbench.yaml"); err == nil {
 		t.Fatal("expected an error when no github-actions targets are present")

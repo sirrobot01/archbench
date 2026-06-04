@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 func TestSelectTargets(t *testing.T) {
-	targets := []archbench.Target{
+	targets := []spec.Target{
 		{Name: "local"},
 		{Name: "amd64"},
 	}
@@ -26,7 +26,7 @@ func TestSelectTargets(t *testing.T) {
 }
 
 func TestRunTargetsBoundsConcurrency(t *testing.T) {
-	targets := []archbench.Target{
+	targets := []spec.Target{
 		{Name: "one"},
 		{Name: "two"},
 		{Name: "three"},
@@ -36,7 +36,7 @@ func TestRunTargetsBoundsConcurrency(t *testing.T) {
 	done := make(chan error, 1)
 
 	go func() {
-		_, err := runTargets(context.Background(), targets, 2, func(_ context.Context, target archbench.Target) (*targetRun, error) {
+		_, err := runTargets(context.Background(), targets, 2, func(_ context.Context, target spec.Target) (*targetRun, error) {
 			started <- target.Name
 			<-release
 			return &targetRun{Result: resultFor(target.Name)}, nil
@@ -63,13 +63,13 @@ func TestRunTargetsBoundsConcurrency(t *testing.T) {
 }
 
 func TestRunTargetsReturnsResultsInTargetOrder(t *testing.T) {
-	targets := []archbench.Target{
+	targets := []spec.Target{
 		{Name: "slow"},
 		{Name: "fast"},
 		{Name: "middle"},
 	}
 
-	results, err := runTargets(context.Background(), targets, 3, func(_ context.Context, target archbench.Target) (*targetRun, error) {
+	results, err := runTargets(context.Background(), targets, 3, func(_ context.Context, target spec.Target) (*targetRun, error) {
 		switch target.Name {
 		case "slow":
 			time.Sleep(30 * time.Millisecond)
@@ -103,11 +103,11 @@ func receiveStarted(t *testing.T, ch <-chan string) string {
 	}
 }
 
-func resultFor(target string) *archbench.RunResult {
-	return &archbench.RunResult{
+func resultFor(target string) *spec.RunResult {
+	return &spec.RunResult{
 		Target: target,
-		Mode:   archbench.ModeBench,
-		Metadata: archbench.Metadata{
+		Mode:   spec.ModeBench,
+		Metadata: spec.Metadata{
 			Arch: "test",
 			OS:   "test",
 		},

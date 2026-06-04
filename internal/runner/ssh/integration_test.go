@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 const sshImage = "lscr.io/linuxserver/openssh-server:latest"
@@ -38,7 +38,7 @@ func TestIntegrationRealOpenSSH(t *testing.T) {
 	writeFile(t, project, "hello.txt", "real openssh\n")
 	writeFile(t, project, "nested/data.txt", "nested payload\n")
 
-	r := New(target, project, archbench.Cache{})
+	r := New(target, project, spec.Cache{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -48,7 +48,7 @@ func TestIntegrationRealOpenSSH(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = r.Cleanup(ctx) })
 
-	out, err := r.Execute(ctx, archbench.Run{
+	out, err := r.Execute(ctx, spec.Run{
 		Setup:   []string{"test -f hello.txt", "test -f nested/data.txt"},
 		Command: `cat hello.txt nested/data.txt; echo "secret=$TOKEN"`,
 		Env:     map[string]string{"TOKEN": "s3cr3t"},
@@ -97,13 +97,13 @@ func requireSSHTools(t *testing.T) {
 }
 
 // provision returns a target for a real sshd, choosing a backend.
-func provision(t *testing.T) archbench.Target {
+func provision(t *testing.T) spec.Target {
 	if host := os.Getenv("ARCHBENCH_SSH_TEST_HOST"); host != "" {
 		user, key := os.Getenv("ARCHBENCH_SSH_TEST_USER"), os.Getenv("ARCHBENCH_SSH_TEST_KEY")
 		if user == "" || key == "" {
 			t.Fatal("ARCHBENCH_SSH_TEST_HOST set but _USER/_KEY missing")
 		}
-		return archbench.Target{Type: archbench.TargetSSH, Host: host, Port: envPort(t), User: user, Key: key}
+		return spec.Target{Type: spec.TargetSSH, Host: host, Port: envPort(t), User: user, Key: key}
 	}
 	if !dockerAvailable() {
 		t.Skip("no ARCHBENCH_SSH_TEST_HOST and docker unavailable; skipping real-openssh test")
@@ -130,7 +130,7 @@ func dockerAvailable() bool {
 	return exec.Command("docker", "info").Run() == nil
 }
 
-func provisionDocker(t *testing.T) archbench.Target {
+func provisionDocker(t *testing.T) spec.Target {
 	// The container's host key is ephemeral, so skip verification for it.
 	t.Setenv(insecureEnv, "1")
 
@@ -164,7 +164,7 @@ func provisionDocker(t *testing.T) archbench.Target {
 	port, _ := strconv.Atoi(p)
 
 	waitForSSH(t, host, port, 45*time.Second)
-	return archbench.Target{Type: archbench.TargetSSH, Host: host, Port: port, User: user, Key: keyPath}
+	return spec.Target{Type: spec.TargetSSH, Host: host, Port: port, User: user, Key: keyPath}
 }
 
 // waitForSSH blocks until the daemon presents an SSH banner or timeout.
@@ -189,9 +189,9 @@ func waitForSSH(t *testing.T, host string, port int, timeout time.Duration) {
 }
 
 // remoteExists reports whether path exists on the host, via a fresh runner.
-func remoteExists(t *testing.T, target archbench.Target, path string) bool {
+func remoteExists(t *testing.T, target spec.Target, path string) bool {
 	t.Helper()
-	vr := New(target, "", archbench.Cache{})
+	vr := New(target, "", spec.Cache{})
 	_, _, err := vr.run(context.Background(), "test -e "+shellQuote(path))
 	return err == nil
 }

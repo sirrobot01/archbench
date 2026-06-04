@@ -11,11 +11,11 @@ import (
 	"context"
 	"os"
 
-	"github.com/sirrobot01/archbench"
 	"github.com/sirrobot01/archbench/internal/runner/local"
+	"github.com/sirrobot01/archbench/spec"
 )
 
-var _ archbench.Runner = (*Runner)(nil)
+var _ spec.Runner = (*Runner)(nil)
 
 // Runner executes a run on the current machine, tagging output with GitHub
 // Actions runner metadata. Outside CI it behaves exactly like the local runner.
@@ -24,13 +24,13 @@ type Runner struct {
 }
 
 // New returns a github-actions runner rooted at dir.
-func New(dir string, cache archbench.Cache) *Runner {
+func New(dir string, cache spec.Cache) *Runner {
 	return &Runner{Runner: local.New(dir, cache)}
 }
 
 // Execute delegates to the local runner, then stamps the GitHub runner label
 // onto the output so reports record which CI machine produced the numbers.
-func (r *Runner) Execute(ctx context.Context, run archbench.Run) (*archbench.Output, error) {
+func (r *Runner) Execute(ctx context.Context, run spec.Run) (*spec.Output, error) {
 	out, err := r.Runner.Execute(ctx, run)
 	if out != nil {
 		out.Runner = runnerLabel()

@@ -26,22 +26,22 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirrobot01/archbench"
 	"github.com/sirrobot01/archbench/internal/runner/exit"
 	"github.com/sirrobot01/archbench/internal/runner/project"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 // workdir is the in-container directory the project is unpacked into. It is a
 // fixed, space-free path so it needs no quoting when handed to `docker`.
 const workdir = "/archbench"
 
-var _ archbench.Runner = (*Runner)(nil)
+var _ spec.Runner = (*Runner)(nil)
 
 // Runner executes a run inside a container built from the target's image.
 type Runner struct {
-	target archbench.Target
+	target spec.Target
 	dir    string
-	cache  archbench.Cache
+	cache  spec.Cache
 
 	container  string
 	cacheDir   string
@@ -49,15 +49,15 @@ type Runner struct {
 }
 
 // New returns a docker runner for target, syncing the local project at dir.
-func New(target archbench.Target, dir string, cache archbench.Cache) *Runner {
+func New(target spec.Target, dir string, cache spec.Cache) *Runner {
 	return &Runner{target: target, dir: dir, cache: cache}
 }
 
 // A docker target runs on the local daemon, so its native architecture is the
 // host's. SupportsPlatform lets the engine treat a mismatched `platform` as
 // emulation.
-func (r *Runner) Capabilities() archbench.Capabilities {
-	return archbench.Capabilities{Arch: runtime.GOARCH, SupportsPlatform: true}
+func (r *Runner) Capabilities() spec.Capabilities {
+	return spec.Capabilities{Arch: runtime.GOARCH, SupportsPlatform: true}
 }
 
 // Prepare creates and starts the container, then uploads the project into it.
@@ -119,7 +119,7 @@ func (r *Runner) hostCacheDir() string {
 	if platform == "" {
 		platform = "native"
 	}
-	return filepath.Join(base, "archbench", r.cache.Suite, "docker", archbench.Slug(platform))
+	return filepath.Join(base, "archbench", r.cache.Suite, "docker", spec.Slug(platform))
 }
 
 // Setup runs target-level provisioning steps in the work directory. The cache
@@ -140,7 +140,7 @@ func (r *Runner) Setup(ctx context.Context, steps []string, env map[string]strin
 	return nil
 }
 
-func (r *Runner) Execute(ctx context.Context, run archbench.Run) (*archbench.Output, error) {
+func (r *Runner) Execute(ctx context.Context, run spec.Run) (*spec.Output, error) {
 	if len(run.Env) > 0 {
 		if err := r.writeEnvFile(ctx, run.Env); err != nil {
 			return nil, fmt.Errorf("write env file: %w", err)
@@ -154,7 +154,7 @@ func (r *Runner) Execute(ctx context.Context, run archbench.Run) (*archbench.Out
 		}
 	}
 
-	out := &archbench.Output{
+	out := &spec.Output{
 		Arch:      r.detect(ctx, archCmd),
 		OS:        r.detect(ctx, osCmd),
 		Kernel:    r.detect(ctx, "uname -r"),
@@ -252,7 +252,7 @@ func (r *Runner) execInput(ctx context.Context, script, input string) error {
 // secret and is set inline; custom env lives in the sourced file.
 func (r *Runner) inWorkdir(cmd string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "export %s=%s; ", archbench.CacheEnv, shellQuote(r.cacheDir))
+	fmt.Fprintf(&b, "export %s=%s; ", spec.CacheEnv, shellQuote(r.cacheDir))
 	if r.envSourced {
 		fmt.Fprintf(&b, ". %s; ", shellQuote(r.envFile()))
 	}
@@ -268,7 +268,7 @@ func (r *Runner) envFile() string { return workdir + "/.archbench-env" }
 func (r *Runner) writeEnvFile(ctx context.Context, env map[string]string) error {
 	var b strings.Builder
 	for _, k := range sortedKeys(env) {
-		fmt.Fprintf(&b, "export %s=%s\n", k, shellQuote(archbench.ExpandCache(env[k], r.cacheDir)))
+		fmt.Fprintf(&b, "export %s=%s\n", k, shellQuote(spec.ExpandCache(env[k], r.cacheDir)))
 	}
 	return r.execInput(ctx, "umask 077; cat > "+shellQuote(r.envFile()), b.String())
 }

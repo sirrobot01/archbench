@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 func newCacheCmd() *cobra.Command {
@@ -44,7 +44,7 @@ func newCacheCleanCmd() *cobra.Command {
 				return err
 			}
 			if suite != "" {
-				dir = filepath.Join(dir, archbench.Slug(suite))
+				dir = filepath.Join(dir, spec.Slug(suite))
 			}
 			if err := os.RemoveAll(dir); err != nil {
 				return err

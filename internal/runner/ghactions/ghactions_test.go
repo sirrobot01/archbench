@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 func TestRunnerLabelOutsideCI(t *testing.T) {
@@ -35,13 +35,13 @@ func TestExecuteTagsRunner(t *testing.T) {
 	t.Setenv("RUNNER_OS", "Linux")
 	t.Setenv("RUNNER_ARCH", "ARM64")
 
-	r := New(t.TempDir(), archbench.Cache{})
+	r := New(t.TempDir(), spec.Cache{})
 	if err := r.Prepare(context.Background()); err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
 	t.Cleanup(func() { _ = r.Cleanup(context.Background()) })
 
-	out, err := r.Execute(context.Background(), archbench.Run{Command: "echo hi"})
+	out, err := r.Execute(context.Background(), spec.Run{Command: "echo hi"})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}

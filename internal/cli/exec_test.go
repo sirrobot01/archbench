@@ -6,12 +6,12 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 // runExec drives the hidden exec worker with a job on stdin and returns its
 // decoded result, mirroring what the SSH runner does over the wire.
-func runExec(t *testing.T, job archbench.Job) (*archbench.RunResult, error) {
+func runExec(t *testing.T, job spec.Job) (*spec.RunResult, error) {
 	t.Helper()
 	in, err := json.Marshal(job)
 	if err != nil {
@@ -27,7 +27,7 @@ func runExec(t *testing.T, job archbench.Job) (*archbench.RunResult, error) {
 		return nil, err
 	}
 
-	var res archbench.RunResult
+	var res spec.RunResult
 	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
 		t.Fatalf("decode result: %v\n%s", err, out.String())
 	}
@@ -41,11 +41,11 @@ func TestExecRoundTrip(t *testing.T) {
 		t.Skip("local runner requires a POSIX shell")
 	}
 
-	res, err := runExec(t, archbench.Job{
-		ProtocolVersion: archbench.ProtocolVersion,
-		Mode:            archbench.ModeBench,
+	res, err := runExec(t, spec.Job{
+		ProtocolVersion: spec.ProtocolVersion,
+		Mode:            spec.ModeBench,
 		Parser:          "go-test",
-		Runs: []archbench.Run{
+		Runs: []spec.Run{
 			{Name: "first", Command: "echo one"},
 			{Name: "second", Command: "echo two"},
 		},
@@ -68,11 +68,11 @@ func TestExecCapturesFailure(t *testing.T) {
 		t.Skip("local runner requires a POSIX shell")
 	}
 
-	res, err := runExec(t, archbench.Job{
-		ProtocolVersion: archbench.ProtocolVersion,
-		Mode:            archbench.ModeBench,
+	res, err := runExec(t, spec.Job{
+		ProtocolVersion: spec.ProtocolVersion,
+		Mode:            spec.ModeBench,
 		Parser:          "go-test",
-		Runs:            []archbench.Run{{Name: "boom", Command: "echo nope 1>&2; exit 3"}},
+		Runs:            []spec.Run{{Name: "boom", Command: "echo nope 1>&2; exit 3"}},
 	})
 	if err != nil {
 		t.Fatalf("exec: %v", err)
@@ -88,11 +88,11 @@ func TestExecCapturesFailure(t *testing.T) {
 // TestExecRejectsProtocolMismatch confirms the worker refuses a job whose
 // protocol version it does not understand.
 func TestExecRejectsProtocolMismatch(t *testing.T) {
-	_, err := runExec(t, archbench.Job{
-		ProtocolVersion: archbench.ProtocolVersion + 1,
-		Mode:            archbench.ModeBench,
+	_, err := runExec(t, spec.Job{
+		ProtocolVersion: spec.ProtocolVersion + 1,
+		Mode:            spec.ModeBench,
 		Parser:          "go-test",
-		Runs:            []archbench.Run{{Name: "noop", Command: "true"}},
+		Runs:            []spec.Run{{Name: "noop", Command: "true"}},
 	})
 	if err == nil {
 		t.Fatal("expected a protocol mismatch error")

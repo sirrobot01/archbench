@@ -11,9 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sirrobot01/archbench"
 	"github.com/sirrobot01/archbench/internal/engine"
 	"github.com/sirrobot01/archbench/internal/ui"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 func newRunCmd() *cobra.Command {
@@ -30,7 +30,7 @@ func newRunCmd() *cobra.Command {
 		Use:   "run",
 		Short: "Run the suite against all targets, or one with --target",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			s, err := archbench.LoadSpec(specPath)
+			s, err := spec.LoadSpec(specPath)
 			if err != nil {
 				return err
 			}
@@ -58,7 +58,7 @@ func newRunCmd() *cobra.Command {
 			var results []targetRun
 			err = ui.Spinner(ctx, cmd.ErrOrStderr(), runTitle(targets, concurrency), func(spinnerCtx context.Context) error {
 				var runErr error
-				results, runErr = runTargets(spinnerCtx, targets, concurrency, func(runCtx context.Context, target archbench.Target) (*targetRun, error) {
+				results, runErr = runTargets(spinnerCtx, targets, concurrency, func(runCtx context.Context, target spec.Target) (*targetRun, error) {
 					var out targetRun
 					var runErr error
 					out.Result, out.Emulated, runErr = eng.Run(runCtx, s, target)
@@ -71,7 +71,7 @@ func newRunCmd() *cobra.Command {
 			}
 
 			for _, result := range results {
-				if result.Emulated && result.Result.Mode == archbench.ModeBench {
+				if result.Emulated && result.Result.Mode == spec.ModeBench {
 					cmd.PrintErrf("⚠️  target %q runs under emulation — benchmark timings are not trustworthy\n", result.Target.Name)
 				}
 
@@ -85,7 +85,7 @@ func newRunCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&specPath, "spec", "s", archbench.DefaultSpecFile, "path to spec file")
+	cmd.Flags().StringVarP(&specPath, "spec", "s", spec.DefaultSpecFile, "path to spec file")
 	cmd.Flags().StringVar(&dir, "dir", ".", "project working directory")
 	cmd.Flags().StringVarP(&outDir, "out", "o", "archbench-results", "directory for result artifacts")
 	cmd.Flags().StringVarP(&only, "target", "t", "", "run only this target")
@@ -96,15 +96,15 @@ func newRunCmd() *cobra.Command {
 }
 
 type targetRun struct {
-	Target   archbench.Target
-	Result   *archbench.RunResult
+	Target   spec.Target
+	Result   *spec.RunResult
 	Emulated bool
 }
 
-type targetRunner func(context.Context, archbench.Target) (*targetRun, error)
+type targetRunner func(context.Context, spec.Target) (*targetRun, error)
 
-func selectTargets(targets []archbench.Target, only string) []archbench.Target {
-	selected := make([]archbench.Target, 0, len(targets))
+func selectTargets(targets []spec.Target, only string) []spec.Target {
+	selected := make([]spec.Target, 0, len(targets))
 	for _, t := range targets {
 		if only != "" && t.Name != only {
 			continue
@@ -114,7 +114,7 @@ func selectTargets(targets []archbench.Target, only string) []archbench.Target {
 	return selected
 }
 
-func runTitle(targets []archbench.Target, concurrency int) string {
+func runTitle(targets []spec.Target, concurrency int) string {
 	if len(targets) == 1 {
 		return fmt.Sprintf("running %s", targets[0].Name)
 	}
@@ -124,7 +124,7 @@ func runTitle(targets []archbench.Target, concurrency int) string {
 	return fmt.Sprintf("running %d targets with concurrency %d", len(targets), concurrency)
 }
 
-func runTargets(ctx context.Context, targets []archbench.Target, concurrency int, runner targetRunner) ([]targetRun, error) {
+func runTargets(ctx context.Context, targets []spec.Target, concurrency int, runner targetRunner) ([]targetRun, error) {
 	if concurrency < 1 {
 		return nil, fmt.Errorf("concurrency must be at least 1")
 	}

@@ -4,6 +4,14 @@
 
 # ArchBench
 
+<p align="center">
+  <a href="https://github.com/sirrobot01/archbench/actions/workflows/ci.yml"><img src="https://github.com/sirrobot01/archbench/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/sirrobot01/archbench/actions/workflows/archbench.yml"><img src="https://github.com/sirrobot01/archbench/actions/workflows/archbench.yml/badge.svg" alt="Benchmark"></a>
+  <a href="https://github.com/sirrobot01/archbench/releases/latest"><img src="https://img.shields.io/github/v/release/sirrobot01/archbench" alt="Latest release"></a>
+  <a href="https://pkg.go.dev/github.com/sirrobot01/archbench"><img src="https://pkg.go.dev/badge/github.com/sirrobot01/archbench.svg" alt="Go Reference"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
+
 ArchBench is a lightweight benchmark and test orchestration tool for native
 cross-architecture workflows. It is aimed at developers who work on ARM64
 laptops but need reproducible results from AMD64 Linux machines, homelab boxes,
@@ -31,7 +39,7 @@ prebuilt binary below.
 ### Go
 
 ```sh
-go install github.com/sirrobot01/archbench/cmd/archbench@latest
+go install github.com/sirrobot01/archbench@latest
 ```
 
 ### Prebuilt binaries
@@ -42,7 +50,7 @@ Download a `tar.gz` for your OS/arch from the
 ### From source
 
 ```sh
-go build ./cmd/archbench
+go build -o archbench .
 ./archbench version
 ```
 
@@ -110,9 +118,6 @@ archbench run \
   --no-cache
 ```
 
-See [examples/README.md](examples/README.md) for the full list, including a
-multi-target spec that adds SSH (exec mode) and Docker targets.
-
 ## Spec Shape
 
 ```yaml
@@ -158,8 +163,3 @@ Docker, GitHub Actions, caching, and test mode are covered in the docs below.
   caching, and test mode.
 - [Security Model](docs/security.md) — SSH and Docker trust, project sync, and
   how environment secrets are handled.
-
-## Project Status
-
-ArchBench is still in beta. The core local/SSH path builds and has unit coverage, but
-the public API and result schema should still be treated as changeable.

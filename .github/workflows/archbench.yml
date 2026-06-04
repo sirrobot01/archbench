@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -39,7 +39,7 @@ jobs:
       - name: Run archbench
         run: archbench run --spec archbench.yaml --target ci
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: archbench-ci
           path: archbench-results/ci.json
@@ -57,7 +57,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0 # need the base ref to benchmark it
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true

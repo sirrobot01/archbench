@@ -1,4 +1,4 @@
-package archbench
+package spec
 
 // ProtocolVersion is the wire-format version of the exec Job/RunResult exchange.
 // An orchestrator stamps it into the Job; a remote `archbench exec` rejects a

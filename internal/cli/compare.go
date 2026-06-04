@@ -8,7 +8,7 @@ import (
 	"github.com/sirrobot01/archbench/internal/engine"
 	"github.com/spf13/cobra"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 func newCompareCmd() *cobra.Command {
@@ -49,12 +49,12 @@ func newCompareCmd() *cobra.Command {
 	return cmd
 }
 
-func readResult(path string) (*archbench.RunResult, error) {
+func readResult(path string) (*spec.RunResult, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var r archbench.RunResult
+	var r spec.RunResult
 	if err := json.Unmarshal(data, &r); err != nil {
 		return nil, fmt.Errorf("parse result %q: %w", path, err)
 	}

@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 func newGenerateCmd() *cobra.Command {
@@ -21,7 +21,7 @@ func newGenerateCmd() *cobra.Command {
 		Use:   "generate",
 		Short: "Generate a GitHub Actions workflow that runs the suite's github-actions targets",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			s, err := archbench.LoadSpec(specPath)
+			s, err := spec.LoadSpec(specPath)
 			if err != nil {
 				return err
 			}
@@ -44,7 +44,7 @@ func newGenerateCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVarP(&specPath, "spec", "s", archbench.DefaultSpecFile, "path to spec file")
+	cmd.Flags().StringVarP(&specPath, "spec", "s", spec.DefaultSpecFile, "path to spec file")
 	cmd.Flags().StringVarP(&outPath, "out", "o", filepath.Join(".github", "workflows", "archbench.yml"), "path for the generated workflow")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing workflow")
 	return cmd
@@ -52,10 +52,10 @@ func newGenerateCmd() *cobra.Command {
 
 // generateWorkflow renders a GitHub Actions workflow that runs each
 // github-actions target as a matrix job on its configured runner.
-func generateWorkflow(s *archbench.Spec, specPath string) (string, error) {
-	var jobs []archbench.Target
+func generateWorkflow(s *spec.Spec, specPath string) (string, error) {
+	var jobs []spec.Target
 	for _, t := range s.Targets {
-		if t.Type == archbench.TargetGitHubActions {
+		if t.Type == spec.TargetGitHubActions {
 			jobs = append(jobs, t)
 		}
 	}
@@ -88,17 +88,17 @@ func generateWorkflow(s *archbench.Spec, specPath string) (string, error) {
 		fmt.Fprintf(&b, "            runs-on: %s\n", runsOn)
 	}
 	b.WriteString("    steps:\n")
-	b.WriteString("      - uses: actions/checkout@v4\n")
+	b.WriteString("      - uses: actions/checkout@v6\n")
 	if s.Parser == "go-test" {
-		b.WriteString("      - uses: actions/setup-go@v5\n")
+		b.WriteString("      - uses: actions/setup-go@v6\n")
 		b.WriteString("        with:\n")
 		b.WriteString("          go-version: stable\n")
 	}
 	b.WriteString("      - name: Install archbench\n")
-	b.WriteString("        run: go install github.com/sirrobot01/archbench/cmd/archbench@latest\n")
+	b.WriteString("        run: go install github.com/sirrobot01/archbench@latest\n")
 	b.WriteString("      - name: Run archbench\n")
 	fmt.Fprintf(&b, "        run: archbench run --spec %s --target ${{ matrix.target }}\n", specPath)
-	b.WriteString("      - uses: actions/upload-artifact@v4\n")
+	b.WriteString("      - uses: actions/upload-artifact@v5\n")
 	b.WriteString("        with:\n")
 	b.WriteString("          name: archbench-${{ matrix.target }}\n")
 	b.WriteString("          path: archbench-results/${{ matrix.target }}.json\n")

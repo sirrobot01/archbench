@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirrobot01/archbench"
 	"github.com/sirrobot01/archbench/internal/parser/gotest"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 // stubRunner is an in-memory Runner that returns canned bench output for every
@@ -18,10 +18,10 @@ type stubRunner struct{ stdout string }
 func (stubRunner) Prepare(context.Context) error                            { return nil }
 func (stubRunner) Setup(context.Context, []string, map[string]string) error { return nil }
 func (stubRunner) Cleanup(context.Context) error                            { return nil }
-func (stubRunner) Capabilities() archbench.Capabilities                     { return archbench.Capabilities{Arch: "amd64"} }
+func (stubRunner) Capabilities() spec.Capabilities                          { return spec.Capabilities{Arch: "amd64"} }
 
-func (r stubRunner) Execute(context.Context, archbench.Run) (*archbench.Output, error) {
-	return &archbench.Output{
+func (r stubRunner) Execute(context.Context, spec.Run) (*spec.Output, error) {
+	return &spec.Output{
 		Stdout:    r.stdout,
 		Arch:      "amd64",
 		OS:        "linux",
@@ -46,13 +46,13 @@ func BenchmarkRunJob(b *testing.B) {
 	r := stubRunner{stdout: cannedBench(10, 10)}
 	p := gotest.New()
 
-	runs := make([]archbench.Run, 8)
+	runs := make([]spec.Run, 8)
 	for i := range runs {
-		runs[i] = archbench.Run{Name: fmt.Sprintf("run%d", i), Command: "go test -bench=."}
+		runs[i] = spec.Run{Name: fmt.Sprintf("run%d", i), Command: "go test -bench=."}
 	}
-	job := archbench.Job{
-		ProtocolVersion: archbench.ProtocolVersion,
-		Mode:            archbench.ModeBench,
+	job := spec.Job{
+		ProtocolVersion: spec.ProtocolVersion,
+		Mode:            spec.ModeBench,
 		Parser:          "go-test",
 		Env:             map[string]string{"GOCACHE": "$ARCHBENCH_CACHE/go-build"},
 		Runs:            runs,

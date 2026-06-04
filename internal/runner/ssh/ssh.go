@@ -26,23 +26,23 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirrobot01/archbench"
 	"github.com/sirrobot01/archbench/internal/runner/exit"
 	"github.com/sirrobot01/archbench/internal/runner/project"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 const insecureEnv = "ARCHBENCH_SSH_INSECURE"
 
 var (
-	_ archbench.Runner      = (*Runner)(nil)
-	_ archbench.SuiteRunner = (*Runner)(nil)
+	_ spec.Runner      = (*Runner)(nil)
+	_ spec.SuiteRunner = (*Runner)(nil)
 )
 
 // Runner executes a run on a remote host over SSH.
 type Runner struct {
-	target archbench.Target
+	target spec.Target
 	dir    string
-	cache  archbench.Cache
+	cache  spec.Cache
 
 	exec       bool
 	execBinary string
@@ -53,7 +53,7 @@ type Runner struct {
 }
 
 // New returns an SSH runner for target, syncing the local project at dir.
-func New(target archbench.Target, dir string, cache archbench.Cache) *Runner {
+func New(target spec.Target, dir string, cache spec.Cache) *Runner {
 	return &Runner{
 		target:     target,
 		dir:        dir,
@@ -65,8 +65,8 @@ func New(target archbench.Target, dir string, cache archbench.Cache) *Runner {
 
 // Capabilities reports Suite when the target opts into exec mode, so the engine
 // delegates the whole job to RunSuite instead of driving per-run Execute.
-func (r *Runner) Capabilities() archbench.Capabilities {
-	return archbench.Capabilities{Remote: true, Suite: r.exec}
+func (r *Runner) Capabilities() spec.Capabilities {
+	return spec.Capabilities{Remote: true, Suite: r.exec}
 }
 
 // Prepare creates an isolated remote work directory and uploads the project.
@@ -78,7 +78,7 @@ func (r *Runner) Prepare(ctx context.Context) error {
 		fmt.Fprintf(os.Stderr, "⚠️  host-key verification DISABLED for %s (%s set)\n", r.target.Host, insecureEnv)
 	}
 
-	wd, _, err := r.run(ctx, "mktemp -d -t archbench.XXXXXX")
+	wd, _, err := r.run(ctx, "mktemp -d -t spec.XXXXXX")
 	if err != nil {
 		return fmt.Errorf("create workdir: %w", err)
 	}
@@ -131,7 +131,7 @@ func (r *Runner) Setup(ctx context.Context, steps []string, env map[string]strin
 	return nil
 }
 
-func (r *Runner) Execute(ctx context.Context, run archbench.Run) (*archbench.Output, error) {
+func (r *Runner) Execute(ctx context.Context, run spec.Run) (*spec.Output, error) {
 	if len(run.Env) > 0 {
 		if err := r.writeEnvFile(ctx, run.Env); err != nil {
 			return nil, fmt.Errorf("write env file: %w", err)
@@ -145,7 +145,7 @@ func (r *Runner) Execute(ctx context.Context, run archbench.Run) (*archbench.Out
 		}
 	}
 
-	out := &archbench.Output{
+	out := &spec.Output{
 		Arch:      r.detect(ctx, archCmd),
 		OS:        r.detect(ctx, osCmd),
 		Kernel:    r.detect(ctx, "uname -r"),
@@ -185,7 +185,7 @@ func (r *Runner) Cleanup(ctx context.Context) error {
 // in on stdin, and decodes the RunResult the worker emits on stdout. The remote
 // detects its own toolchain and parses output, so the orchestrator never scrapes
 // raw test output for this path.
-func (r *Runner) RunSuite(ctx context.Context, job archbench.Job) (*archbench.RunResult, error) {
+func (r *Runner) RunSuite(ctx context.Context, job spec.Job) (*spec.RunResult, error) {
 	if err := r.Prepare(ctx); err != nil {
 		return nil, err
 	}
@@ -222,7 +222,7 @@ func (r *Runner) RunSuite(ctx context.Context, job archbench.Job) (*archbench.Ru
 		return nil, fmt.Errorf("remote exec: %w%s", err, withStderr(stderr))
 	}
 
-	var res archbench.RunResult
+	var res spec.RunResult
 	if err := json.Unmarshal([]byte(stdout), &res); err != nil {
 		return nil, fmt.Errorf("decode result: %w%s", err, withStderr(stderr))
 	}
@@ -391,7 +391,7 @@ func (r *Runner) sshArgs() []string {
 	return append(args, destination(r.target))
 }
 
-func destination(t archbench.Target) string {
+func destination(t spec.Target) string {
 	if t.User != "" {
 		return t.User + "@" + t.Host
 	}
@@ -403,7 +403,7 @@ func destination(t archbench.Target) string {
 // secret and is set inline; custom env lives in the sourced file.
 func (r *Runner) inWorkdir(cmd string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "export %s=%s; ", archbench.CacheEnv, shellQuote(r.cacheDir))
+	fmt.Fprintf(&b, "export %s=%s; ", spec.CacheEnv, shellQuote(r.cacheDir))
 	if r.envSourced {
 		fmt.Fprintf(&b, ". %s; ", shellQuote(r.envFile()))
 	}
@@ -419,7 +419,7 @@ func (r *Runner) envFile() string { return r.workdir + "/.archbench-env" }
 func (r *Runner) writeEnvFile(ctx context.Context, env map[string]string) error {
 	var b strings.Builder
 	for _, k := range sortedKeys(env) {
-		fmt.Fprintf(&b, "export %s=%s\n", k, shellQuote(archbench.ExpandCache(env[k], r.cacheDir)))
+		fmt.Fprintf(&b, "export %s=%s\n", k, shellQuote(spec.ExpandCache(env[k], r.cacheDir)))
 	}
 	return r.runInput(ctx, "umask 077; cat > "+shellQuote(r.envFile()), b.String())
 }

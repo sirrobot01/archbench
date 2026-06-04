@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sirrobot01/archbench"
 	"github.com/sirrobot01/archbench/internal/engine"
 	"github.com/sirrobot01/archbench/internal/runner/local"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 // newExecCmd is the remote worker invoked by exec-mode targets: it reads a Job
@@ -23,13 +23,13 @@ func newExecCmd() *cobra.Command {
 		Hidden: true,
 		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			var job archbench.Job
+			var job spec.Job
 			if err := json.NewDecoder(cmd.InOrStdin()).Decode(&job); err != nil {
 				return fmt.Errorf("decode job: %w", err)
 			}
-			if job.ProtocolVersion != archbench.ProtocolVersion {
+			if job.ProtocolVersion != spec.ProtocolVersion {
 				return fmt.Errorf("unsupported job protocol version %d (this archbench speaks %d); align the orchestrator and host versions",
-					job.ProtocolVersion, archbench.ProtocolVersion)
+					job.ProtocolVersion, spec.ProtocolVersion)
 			}
 
 			p, ok := registry().Get(job.Parser)

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sirrobot01/archbench"
 	"github.com/sirrobot01/archbench/internal/ui"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 // Printer is the subset of cobra.Command's output methods used by reports.
@@ -19,7 +19,7 @@ type Printer interface {
 }
 
 // Terminal writes a human-readable summary of a run.
-func Terminal(p Printer, r *archbench.RunResult) {
+func Terminal(p Printer, r *spec.RunResult) {
 	platform := "unknown"
 	switch {
 	case r.Metadata.OS != "" && r.Metadata.Arch != "":
@@ -47,24 +47,24 @@ func Terminal(p Printer, r *archbench.RunResult) {
 	}
 
 	switch r.Mode {
-	case archbench.ModeBench:
+	case spec.ModeBench:
 		terminalBench(p, r.Runs)
-	case archbench.ModeTest:
+	case spec.ModeTest:
 		terminalTest(p, r.Runs)
 	}
 	p.Println()
 }
 
-func terminalBench(p Printer, runs []archbench.ScenarioResult) {
+func terminalBench(p Printer, runs []spec.ScenarioResult) {
 	for _, run := range runs {
 		p.Printf("%s %s\n", ui.Subtle("run"), ui.Title(run.Name))
 		rows := make([][]string, 0, len(run.Benchmarks))
 		for _, b := range run.Benchmarks {
 			rows = append(rows, []string{
 				b.Name,
-				fmt.Sprintf("%.0f", b.Metrics[archbench.MetricNsPerOp]),
-				fmt.Sprintf("%.0f", b.Metrics[archbench.MetricBytesPerOp]),
-				fmt.Sprintf("%.0f", b.Metrics[archbench.MetricAllocsPerOp]),
+				fmt.Sprintf("%.0f", b.Metrics[spec.MetricNsPerOp]),
+				fmt.Sprintf("%.0f", b.Metrics[spec.MetricBytesPerOp]),
+				fmt.Sprintf("%.0f", b.Metrics[spec.MetricAllocsPerOp]),
 			})
 		}
 		if len(rows) == 0 {
@@ -90,7 +90,7 @@ const exitCommandNotFound = 127
 // failed reports a non-zero run as an error line (with a stderr snippet when
 // available) and returns whether it did so. A zero exit returns false, leaving
 // rendering to the caller.
-func failed(p Printer, run archbench.ScenarioResult) bool {
+func failed(p Printer, run spec.ScenarioResult) bool {
 	if run.ExitCode == 0 {
 		return false
 	}
@@ -116,7 +116,7 @@ func snippet(s string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
-func terminalTest(p Printer, runs []archbench.ScenarioResult) {
+func terminalTest(p Printer, runs []spec.ScenarioResult) {
 	for _, run := range runs {
 		if len(run.Tests) == 0 && run.ExitCode != 0 {
 			p.Printf("%s %s\n", ui.Subtle("run"), ui.Title(run.Name))
@@ -128,11 +128,11 @@ func terminalTest(p Printer, runs []archbench.ScenarioResult) {
 		rows := make([][]string, 0, len(run.Tests))
 		for _, t := range run.Tests {
 			switch t.Status {
-			case archbench.StatusPass:
+			case spec.StatusPass:
 				pass++
-			case archbench.StatusFail:
+			case spec.StatusFail:
 				fail++
-			case archbench.StatusSkip:
+			case spec.StatusSkip:
 				skip++
 			}
 			rows = append(rows, []string{
@@ -159,23 +159,23 @@ func terminalTest(p Printer, runs []archbench.ScenarioResult) {
 }
 
 // Markdown writes a run as a markdown section for PR comments or CI summaries.
-func Markdown(p Printer, r *archbench.RunResult) {
+func Markdown(p Printer, r *spec.RunResult) {
 	p.Printf("### %s `%s/%s`\n\n", r.Target, r.Metadata.OS, r.Metadata.Arch)
 	switch r.Mode {
-	case archbench.ModeBench:
+	case spec.ModeBench:
 		for _, run := range r.Runs {
 			p.Printf("#### %s\n\n", run.Name)
 			p.Println("| Benchmark | ns/op | B/op | allocs/op |")
 			p.Println("|---|--:|--:|--:|")
 			for _, b := range run.Benchmarks {
 				p.Printf("| %s | %.0f | %.0f | %.0f |\n", b.Name,
-					b.Metrics[archbench.MetricNsPerOp],
-					b.Metrics[archbench.MetricBytesPerOp],
-					b.Metrics[archbench.MetricAllocsPerOp])
+					b.Metrics[spec.MetricNsPerOp],
+					b.Metrics[spec.MetricBytesPerOp],
+					b.Metrics[spec.MetricAllocsPerOp])
 			}
 			p.Println()
 		}
-	case archbench.ModeTest:
+	case spec.ModeTest:
 		for _, run := range r.Runs {
 			p.Printf("#### %s\n\n", run.Name)
 			p.Println("| Test | Status | Elapsed (s) |")
@@ -190,7 +190,7 @@ func Markdown(p Printer, r *archbench.RunResult) {
 }
 
 // Compare writes a diff of two runs, with a as the baseline.
-func Compare(p Printer, a, b *archbench.RunResult) error {
+func Compare(p Printer, a, b *spec.RunResult) error {
 	if a.Mode != b.Mode {
 		return errors.New("cannot compare different modes: " + string(a.Mode) + " vs " + string(b.Mode))
 	}
@@ -198,16 +198,16 @@ func Compare(p Printer, a, b *archbench.RunResult) error {
 	p.Printf(" %s\n\n", ui.Subtle(a.Target+" ("+a.Metadata.Arch+") vs "+b.Target+" ("+b.Metadata.Arch+")"))
 
 	switch a.Mode {
-	case archbench.ModeBench:
+	case spec.ModeBench:
 		compareBench(p, a, b)
-	case archbench.ModeTest:
+	case spec.ModeTest:
 		compareTest(p, a, b)
 	}
 	return nil
 }
 
-func compareBench(p Printer, a, b *archbench.RunResult) {
-	candidateRuns := make(map[string]archbench.ScenarioResult, len(b.Runs))
+func compareBench(p Printer, a, b *spec.RunResult) {
+	candidateRuns := make(map[string]spec.ScenarioResult, len(b.Runs))
 	for _, run := range b.Runs {
 		candidateRuns[run.Name] = run
 	}
@@ -220,7 +220,7 @@ func compareBench(p Printer, a, b *archbench.RunResult) {
 		if !ok {
 			rows := make([][]string, 0, len(base.Benchmarks))
 			for _, ob := range base.Benchmarks {
-				rows = append(rows, []string{ob.Name, fmt.Sprintf("%.0f", ob.Metrics[archbench.MetricNsPerOp]), ui.Subtle("-"), ui.Diff("(removed run)")})
+				rows = append(rows, []string{ob.Name, fmt.Sprintf("%.0f", ob.Metrics[spec.MetricNsPerOp]), ui.Subtle("-"), ui.Diff("(removed run)")})
 			}
 			p.Println(ui.RenderTable(
 				[]string{"Benchmark", a.Target + " ns/op", b.Target + " ns/op", "Diff"},
@@ -230,7 +230,7 @@ func compareBench(p Printer, a, b *archbench.RunResult) {
 			continue
 		}
 
-		candidateBenchmarks := make(map[string]archbench.Benchmark, len(candidate.Benchmarks))
+		candidateBenchmarks := make(map[string]spec.Benchmark, len(candidate.Benchmarks))
 		for _, nb := range candidate.Benchmarks {
 			candidateBenchmarks[nb.Name] = nb
 		}
@@ -241,18 +241,18 @@ func compareBench(p Printer, a, b *archbench.RunResult) {
 			seenBenchmarks[ob.Name] = true
 			nb, ok := candidateBenchmarks[ob.Name]
 			if !ok {
-				rows = append(rows, []string{ob.Name, fmt.Sprintf("%.0f", ob.Metrics[archbench.MetricNsPerOp]), ui.Subtle("-"), ui.Diff("(removed)")})
+				rows = append(rows, []string{ob.Name, fmt.Sprintf("%.0f", ob.Metrics[spec.MetricNsPerOp]), ui.Subtle("-"), ui.Diff("(removed)")})
 				continue
 			}
-			an := ob.Metrics[archbench.MetricNsPerOp]
-			bn := nb.Metrics[archbench.MetricNsPerOp]
+			an := ob.Metrics[spec.MetricNsPerOp]
+			bn := nb.Metrics[spec.MetricNsPerOp]
 			rows = append(rows, []string{nb.Name, fmt.Sprintf("%.0f", an), fmt.Sprintf("%.0f", bn), ui.Diff(ratio(an, bn))})
 		}
 		for _, nb := range candidate.Benchmarks {
 			if seenBenchmarks[nb.Name] {
 				continue
 			}
-			rows = append(rows, []string{nb.Name, ui.Subtle("-"), fmt.Sprintf("%.0f", nb.Metrics[archbench.MetricNsPerOp]), ui.Diff("(new)")})
+			rows = append(rows, []string{nb.Name, ui.Subtle("-"), fmt.Sprintf("%.0f", nb.Metrics[spec.MetricNsPerOp]), ui.Diff("(new)")})
 		}
 		p.Println(ui.RenderTable(
 			[]string{"Benchmark", a.Target + " ns/op", b.Target + " ns/op", "Diff"},
@@ -268,7 +268,7 @@ func compareBench(p Printer, a, b *archbench.RunResult) {
 		p.Printf("%s %s\n", ui.Subtle("run"), ui.Title(candidate.Name))
 		rows := make([][]string, 0, len(candidate.Benchmarks))
 		for _, nb := range candidate.Benchmarks {
-			rows = append(rows, []string{nb.Name, ui.Subtle("-"), fmt.Sprintf("%.0f", nb.Metrics[archbench.MetricNsPerOp]), ui.Diff("(new run)")})
+			rows = append(rows, []string{nb.Name, ui.Subtle("-"), fmt.Sprintf("%.0f", nb.Metrics[spec.MetricNsPerOp]), ui.Diff("(new run)")})
 		}
 		p.Println(ui.RenderTable(
 			[]string{"Benchmark", a.Target + " ns/op", b.Target + " ns/op", "Diff"},
@@ -293,11 +293,11 @@ type Regression struct {
 // and benchmarks by name. Benchmarks present on only one side are skipped: a
 // missing data point is a new or removed benchmark, not a regression. It returns
 // nil unless both results are bench mode.
-func BenchRegressions(a, b *archbench.RunResult, thresholdPct float64) []Regression {
-	if a.Mode != archbench.ModeBench || b.Mode != archbench.ModeBench {
+func BenchRegressions(a, b *spec.RunResult, thresholdPct float64) []Regression {
+	if a.Mode != spec.ModeBench || b.Mode != spec.ModeBench {
 		return nil
 	}
-	candidateRuns := make(map[string]archbench.ScenarioResult, len(b.Runs))
+	candidateRuns := make(map[string]spec.ScenarioResult, len(b.Runs))
 	for _, run := range b.Runs {
 		candidateRuns[run.Name] = run
 	}
@@ -308,7 +308,7 @@ func BenchRegressions(a, b *archbench.RunResult, thresholdPct float64) []Regress
 		if !ok {
 			continue
 		}
-		candidateBenchmarks := make(map[string]archbench.Benchmark, len(candidate.Benchmarks))
+		candidateBenchmarks := make(map[string]spec.Benchmark, len(candidate.Benchmarks))
 		for _, nb := range candidate.Benchmarks {
 			candidateBenchmarks[nb.Name] = nb
 		}
@@ -317,8 +317,8 @@ func BenchRegressions(a, b *archbench.RunResult, thresholdPct float64) []Regress
 			if !ok {
 				continue
 			}
-			an := ob.Metrics[archbench.MetricNsPerOp]
-			bn := nb.Metrics[archbench.MetricNsPerOp]
+			an := ob.Metrics[spec.MetricNsPerOp]
+			bn := nb.Metrics[spec.MetricNsPerOp]
 			if an <= 0 {
 				continue
 			}
@@ -353,8 +353,8 @@ func ratio(a, b float64) string {
 	}
 }
 
-func compareTest(p Printer, a, b *archbench.RunResult) {
-	candidateRuns := make(map[string]archbench.ScenarioResult, len(b.Runs))
+func compareTest(p Printer, a, b *spec.RunResult) {
+	candidateRuns := make(map[string]spec.ScenarioResult, len(b.Runs))
 	for _, run := range b.Runs {
 		candidateRuns[run.Name] = run
 	}
@@ -364,7 +364,7 @@ func compareTest(p Printer, a, b *archbench.RunResult) {
 	for _, baseRun := range a.Runs {
 		seenRuns[baseRun.Name] = true
 		candidate, ok := candidateRuns[baseRun.Name]
-		candidateTests := make(map[string]archbench.Test, len(candidate.Tests))
+		candidateTests := make(map[string]spec.Test, len(candidate.Tests))
 		for _, candidateTest := range candidate.Tests {
 			candidateTests[candidateTest.Name] = candidateTest
 		}

@@ -4,7 +4,7 @@ project_name: archbench
 
 builds:
   - id: archbench
-    main: ./cmd/archbench
+    main: .
     binary: archbench
     env:
       - CGO_ENABLED=0

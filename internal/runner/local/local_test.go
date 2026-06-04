@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 func newRunner(t *testing.T) *Runner {
@@ -15,7 +15,7 @@ func newRunner(t *testing.T) *Runner {
 	if runtime.GOOS == "windows" {
 		t.Skip("local runner requires a POSIX shell")
 	}
-	r := New(t.TempDir(), archbench.Cache{})
+	r := New(t.TempDir(), spec.Cache{})
 	if err := r.Prepare(context.Background()); err != nil {
 		t.Fatalf("Prepare: %v", err)
 	}
@@ -32,7 +32,7 @@ func TestExecuteTimeout(t *testing.T) {
 	defer cancel()
 
 	start := time.Now()
-	_, err := r.Execute(ctx, archbench.Run{Command: "sleep 10"})
+	_, err := r.Execute(ctx, spec.Run{Command: "sleep 10"})
 	if err == nil {
 		t.Fatal("expected a timeout error, got nil")
 	}
@@ -46,7 +46,7 @@ func TestExecuteTimeout(t *testing.T) {
 func TestExecuteNonZeroExit(t *testing.T) {
 	r := newRunner(t)
 
-	out, err := r.Execute(context.Background(), archbench.Run{Command: "echo boom; exit 2"})
+	out, err := r.Execute(context.Background(), spec.Run{Command: "echo boom; exit 2"})
 	if err != nil {
 		t.Fatalf("non-zero exit should not be a runner error: %v", err)
 	}
@@ -66,13 +66,13 @@ func TestSetup(t *testing.T) {
 
 	err := r.Setup(context.Background(),
 		[]string{`echo "cache=$ARCHBENCH_CACHE env=$GOMODCACHE" > marker`},
-		map[string]string{"GOMODCACHE": "$" + archbench.CacheEnv + "/go-mod"},
+		map[string]string{"GOMODCACHE": "$" + spec.CacheEnv + "/go-mod"},
 	)
 	if err != nil {
 		t.Fatalf("Setup: %v", err)
 	}
 
-	out, err := r.Execute(context.Background(), archbench.Run{Command: "cat marker"})
+	out, err := r.Execute(context.Background(), spec.Run{Command: "cat marker"})
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -98,7 +98,7 @@ func TestSetupError(t *testing.T) {
 func TestExecuteEnv(t *testing.T) {
 	r := newRunner(t)
 
-	out, err := r.Execute(context.Background(), archbench.Run{
+	out, err := r.Execute(context.Background(), spec.Run{
 		Command: `echo "cache=$ARCHBENCH_CACHE custom=$FOO"`,
 		Env:     map[string]string{"FOO": "bar"},
 	})

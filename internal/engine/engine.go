@@ -7,40 +7,40 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sirrobot01/archbench"
 	"github.com/sirrobot01/archbench/internal/runner/docker"
 	"github.com/sirrobot01/archbench/internal/runner/ghactions"
 	"github.com/sirrobot01/archbench/internal/runner/local"
 	"github.com/sirrobot01/archbench/internal/runner/ssh"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 // Engine runs specs using a set of registered parsers.
 type Engine struct {
-	parsers *archbench.Registry
+	parsers *spec.Registry
 	dir     string
 	cache   bool
 }
 
 // New returns an engine that resolves parsers from reg and runs local targets
 // rooted at dir. When cache is true, runners persist build caches across runs.
-func New(reg *archbench.Registry, dir string, cache bool) *Engine {
+func New(reg *spec.Registry, dir string, cache bool) *Engine {
 	return &Engine{parsers: reg, dir: dir, cache: cache}
 }
 
 // Run executes the spec against target and returns the result and whether it
 // ran under emulation.
-func (e *Engine) Run(ctx context.Context, s *archbench.Spec, target archbench.Target) (*archbench.RunResult, bool, error) {
+func (e *Engine) Run(ctx context.Context, s *spec.Spec, target spec.Target) (*spec.RunResult, bool, error) {
 	mode := s.EffectiveMode()
 
 	p, ok := e.parsers.Get(s.Parser)
 	if !ok {
 		return nil, false, fmt.Errorf("unknown parser %q", s.Parser)
 	}
-	if !archbench.Supports(p, mode) {
+	if !spec.Supports(p, mode) {
 		return nil, false, fmt.Errorf("parser %q does not support mode %q", p.Name(), mode)
 	}
 
-	cache := archbench.Cache{Enabled: e.cache, Suite: archbench.Slug(s.Name)}
+	cache := spec.Cache{Enabled: e.cache, Suite: spec.Slug(s.Name)}
 	r, err := e.runnerFor(target, cache)
 	if err != nil {
 		return nil, false, err
@@ -49,8 +49,8 @@ func (e *Engine) Run(ctx context.Context, s *archbench.Spec, target archbench.Ta
 	// The job is the full unit of work for the target: its setup, env, and runs.
 	// Env is the parser's cache wiring overlaid with the target's env; it applies
 	// to setup and to every run, with each run's own env layered on top in RunJob.
-	job := archbench.Job{
-		ProtocolVersion: archbench.ProtocolVersion,
+	job := spec.Job{
+		ProtocolVersion: spec.ProtocolVersion,
 		Mode:            mode,
 		Parser:          s.Parser,
 		Setup:           target.Setup,
@@ -61,9 +61,9 @@ func (e *Engine) Run(ctx context.Context, s *archbench.Spec, target archbench.Ta
 
 	// A SuiteRunner (e.g. remote exec) runs the whole job out-of-process and
 	// returns the assembled result; every other runner is driven by RunJob.
-	var res *archbench.RunResult
+	var res *spec.RunResult
 	if r.Capabilities().Suite {
-		sr, ok := r.(archbench.SuiteRunner)
+		sr, ok := r.(spec.SuiteRunner)
 		if !ok {
 			return nil, false, fmt.Errorf("runner for %q reports Suite but does not implement SuiteRunner", target.Name)
 		}
@@ -84,7 +84,7 @@ func (e *Engine) Run(ctx context.Context, s *archbench.Spec, target archbench.Ta
 // Cleanup. The local engine path and the remote `archbench exec` worker share
 // it, so a suite runs identically whether driven in-process or on a host. It
 // does not set RunResult.Target; the caller, which knows the target name, does.
-func RunJob(ctx context.Context, r archbench.Runner, p archbench.Parser, job archbench.Job) (*archbench.RunResult, error) {
+func RunJob(ctx context.Context, r spec.Runner, p spec.Parser, job spec.Job) (*spec.RunResult, error) {
 	if err := r.Prepare(ctx); err != nil {
 		return nil, fmt.Errorf("prepare: %w", err)
 	}
@@ -103,10 +103,10 @@ func RunJob(ctx context.Context, r archbench.Runner, p archbench.Parser, job arc
 	}
 
 	started := time.Now()
-	res := &archbench.RunResult{
+	res := &spec.RunResult{
 		Mode:    job.Mode,
 		Started: started,
-		Runs:    make([]archbench.ScenarioResult, 0, len(job.Runs)),
+		Runs:    make([]spec.ScenarioResult, 0, len(job.Runs)),
 	}
 
 	for _, specRun := range job.Runs {
@@ -119,7 +119,7 @@ func RunJob(ctx context.Context, r archbench.Runner, p archbench.Parser, job arc
 			return nil, fmt.Errorf("execute %q: %w", run.Name, err)
 		}
 		if res.Metadata.Arch == "" && res.Metadata.OS == "" {
-			res.Metadata = archbench.Metadata{
+			res.Metadata = spec.Metadata{
 				Arch:      out.Arch,
 				OS:        out.OS,
 				Kernel:    out.Kernel,
@@ -137,7 +137,7 @@ func RunJob(ctx context.Context, r archbench.Runner, p archbench.Parser, job arc
 		}
 		res.Metadata.Toolchain = mergeEnv(res.Metadata.Toolchain, parsed.Toolchain)
 
-		scenario := archbench.ScenarioResult{
+		scenario := spec.ScenarioResult{
 			Name:            specRun.Name,
 			Command:         specRun.Command,
 			Started:         runStarted,
@@ -157,15 +157,15 @@ func RunJob(ctx context.Context, r archbench.Runner, p archbench.Parser, job arc
 	return res, nil
 }
 
-func (e *Engine) runnerFor(t archbench.Target, cache archbench.Cache) (archbench.Runner, error) {
+func (e *Engine) runnerFor(t spec.Target, cache spec.Cache) (spec.Runner, error) {
 	switch t.Type {
-	case archbench.TargetLocal:
+	case spec.TargetLocal:
 		return local.New(e.dir, cache), nil
-	case archbench.TargetSSH:
+	case spec.TargetSSH:
 		return ssh.New(t, e.dir, cache), nil
-	case archbench.TargetDocker:
+	case spec.TargetDocker:
 		return docker.New(t, e.dir, cache), nil
-	case archbench.TargetGitHubActions:
+	case spec.TargetGitHubActions:
 		return ghactions.New(e.dir, cache), nil
 	default:
 		return nil, fmt.Errorf("unknown target type %q", t.Type)
@@ -179,8 +179,8 @@ func defaultEnv(parser string) map[string]string {
 	switch parser {
 	case "go-test":
 		return map[string]string{
-			"GOCACHE":    "$" + archbench.CacheEnv + "/go-build",
-			"GOMODCACHE": "$" + archbench.CacheEnv + "/go-mod",
+			"GOCACHE":    "$" + spec.CacheEnv + "/go-build",
+			"GOMODCACHE": "$" + spec.CacheEnv + "/go-mod",
 		}
 	default:
 		return nil
@@ -189,8 +189,8 @@ func defaultEnv(parser string) map[string]string {
 
 // emulated reports whether a docker target pins a platform that differs from
 // the host architecture, which makes benchmark timings untrustworthy.
-func emulated(t archbench.Target, caps archbench.Capabilities) bool {
-	if t.Type == archbench.TargetDocker && t.Platform != "" {
+func emulated(t spec.Target, caps spec.Capabilities) bool {
+	if t.Type == spec.TargetDocker && t.Platform != "" {
 		return caps.Arch != "" && !strings.HasSuffix(t.Platform, caps.Arch)
 	}
 	return false

@@ -4,19 +4,19 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 func TestSSHArgs(t *testing.T) {
 	t.Setenv(insecureEnv, "")
 
-	r := New(archbench.Target{
+	r := New(spec.Target{
 		Host:      "bench-box",
 		User:      "ubuntu",
 		Port:      2222,
 		Key:       "/keys/id_ed25519",
 		ProxyJump: "bastion",
-	}, "", archbench.Cache{})
+	}, "", spec.Cache{})
 
 	args := strings.Join(r.sshArgs(), " ")
 	for _, want := range []string{
@@ -38,7 +38,7 @@ func TestSSHArgsMinimal(t *testing.T) {
 
 	// With only a host (an ssh_config alias), nothing extra is forced so the
 	// user's config resolves user/port/identity.
-	r := New(archbench.Target{Host: "alias"}, "", archbench.Cache{})
+	r := New(spec.Target{Host: "alias"}, "", spec.Cache{})
 	args := r.sshArgs()
 	joined := strings.Join(args, " ")
 
@@ -55,14 +55,14 @@ func TestSSHArgsMinimal(t *testing.T) {
 func TestSSHArgsInsecure(t *testing.T) {
 	t.Setenv(insecureEnv, "1")
 
-	args := strings.Join(New(archbench.Target{Host: "h"}, "", archbench.Cache{}).sshArgs(), " ")
+	args := strings.Join(New(spec.Target{Host: "h"}, "", spec.Cache{}).sshArgs(), " ")
 	if !strings.Contains(args, "StrictHostKeyChecking=no") || !strings.Contains(args, "UserKnownHostsFile=/dev/null") {
 		t.Errorf("insecure args missing override: %q", args)
 	}
 }
 
 func TestInWorkdir(t *testing.T) {
-	r := New(archbench.Target{Host: "h"}, "", archbench.Cache{})
+	r := New(spec.Target{Host: "h"}, "", spec.Cache{})
 	r.workdir = "/tmp/wd"
 	r.cacheDir = "/tmp/wd/.cache"
 

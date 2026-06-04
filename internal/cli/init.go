@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sirrobot01/archbench"
+	"github.com/sirrobot01/archbench/spec"
 )
 
 const exampleSpec = `name: my-suite
@@ -46,7 +46,7 @@ func newInitCmd() *cobra.Command {
 		Use:   "init",
 		Short: "Generate an example archbench.yaml",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			path := archbench.DefaultSpecFile
+			path := spec.DefaultSpecFile
 			if _, err := os.Stat(path); err == nil && !force {
 				return fmt.Errorf("%s already exists (use --force to overwrite)", path)
 			}
